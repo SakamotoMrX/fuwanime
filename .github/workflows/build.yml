@@ -22,6 +22,8 @@ jobs:
       VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags are needed to derive the version name
 
       - uses: actions/setup-java@v4
         with:
@@ -45,7 +47,9 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           else
-            echo "VERSION_NAME=2.0.0-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+            # Builds from main are named after the latest release tag, e.g. 2.1.0-build.14.
+            BASE=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v2.0.0)
+            echo "VERSION_NAME=${BASE#v}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           fi
 
       - name: Build APK
