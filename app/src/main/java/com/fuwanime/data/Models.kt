@@ -1,0 +1,112 @@
+package com.fuwanime.data
+
+import androidx.compose.runtime.Immutable
+import com.fuwanime.data.remote.API_HOST
+import com.fuwanime.data.remote.AnimeDto
+import com.fuwanime.data.remote.EpisodeDto
+import com.fuwanime.data.remote.ServerDto
+
+@Immutable
+data class Anime(
+    val id: String,
+    val title: String,
+    val synopsis: String = "",
+    val alternativeTitles: String = "",
+    val poster: String = "",
+    val cover: String = "",
+    val type: String = "",
+    val year: String = "",
+    val status: String = "",
+    val views: Long = 0,
+    val favorites: Long = 0,
+    val studio: String = "",
+    val airedStart: String = "",
+    val genres: List<String> = emptyList(),
+    /** Schedule only: next air time as reported by the API. */
+    val nextAirTime: String = "",
+) {
+    val isOngoing: Boolean get() = status.equals("ONGOING", ignoreCase = true)
+    val displayYear: String get() = year.takeUnless { it.isBlank() || it.equals("UNKNOWN", true) }.orEmpty()
+    val backdrop: String get() = cover.ifBlank { poster }
+}
+
+@Immutable
+data class Episode(
+    val id: String,
+    val number: String,
+    val title: String,
+    val thumbnail: String = "",
+    val releaseDate: String = "",
+    val views: Long = 0,
+) {
+    /** Numeric episode index for sorting; fractional episodes (e.g. 12.5) keep their order. */
+    val sortKey: Double get() = number.toDoubleOrNull() ?: Double.MAX_VALUE
+}
+
+@Immutable
+data class StreamSource(
+    val url: String,
+    val quality: String,
+    val server: String,
+) {
+    /** Vertical resolution parsed from labels like "720p"; 0 when unknown. */
+    val height: Int get() = Regex("""(\d{3,4})""").find(quality)?.value?.toIntOrNull() ?: 0
+}
+
+@Immutable
+data class EpisodeStream(
+    val episode: Episode?,
+    val sources: List<StreamSource>,
+)
+
+fun AnimeDto.toAnime() = Anime(
+    id = id,
+    title = title.trim(),
+    synopsis = synopsis.orEmpty().replace("\r\n", "\n").trim(),
+    alternativeTitles = synonyms.orEmpty().trim(),
+    poster = imageUrl(imagePoster ?: imageCover),
+    cover = imageUrl(imageCover),
+    type = type.orEmpty(),
+    year = year.orEmpty(),
+    status = status.orEmpty(),
+    views = views?.toLongOrNull() ?: 0,
+    favorites = favorites?.toLongOrNull() ?: 0,
+    studio = studio.orEmpty(),
+    airedStart = airedStart.orEmpty(),
+    genres = genre.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() },
+    nextAirTime = keyTime.orEmpty(),
+)
+
+fun EpisodeDto.toEpisode(): Episode {
+    val number = when (val i = index) {
+        is Double -> if (i % 1.0 == 0.0) i.toLong().toString() else i.toString()
+        null -> ""
+        else -> i.toString()
+    }
+    return Episode(
+        id = id,
+        number = number,
+        title = title?.trim().orEmpty().ifBlank { "Episode $number" },
+        thumbnail = imageUrl(image),
+        releaseDate = keyTime.orEmpty(),
+        views = views?.toLongOrNull() ?: 0,
+    )
+}
+
+fun ServerDto.toSource() = StreamSource(
+    url = link.trim(),
+    quality = quality?.trim().orEmpty().ifBlank { "Auto" },
+    server = name?.trim().orEmpty(),
+)
+
+/** Normalises the API's mix of absolute, protocol-relative and root-relative image paths. */
+fun imageUrl(raw: String?): String {
+    val url = raw?.trim().orEmpty()
+    if (url.isEmpty()) return ""
+    return when {
+        url.startsWith("http://") || url.startsWith("https://") -> url
+        url.startsWith("//") -> "https:$url"
+        url.startsWith("/") -> "$API_HOST$url"
+        else -> "$API_HOST/$url"
+    }
+}
