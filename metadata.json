@@ -1,6 +1,0 @@
-{
-  "name": "FuwaNime",
-  "description": "Aplikasi streaming anime FuwaNime berdesain Material 3 dengan katalog lengkap, filter genre & studio, jadwal tayang, dan pemutar video interaktif.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
