@@ -1,0 +1,325 @@
+package com.fuwanime.ui.home
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fuwanime.data.Anime
+import com.fuwanime.data.local.WatchHistoryEntity
+import com.fuwanime.ui.components.ContinueWatchingCard
+import com.fuwanime.ui.components.ErrorState
+import com.fuwanime.ui.components.NetImage
+import com.fuwanime.ui.components.Pill
+import com.fuwanime.ui.components.PosterRow
+import com.fuwanime.ui.components.SectionHeader
+import com.fuwanime.ui.components.SkeletonBox
+import com.fuwanime.ui.components.StatusPill
+import com.fuwanime.ui.components.fadeToBackground
+import com.fuwanime.util.airTime
+import com.fuwanime.util.compactNumber
+import com.fuwanime.util.fuwaViewModel
+import kotlinx.coroutines.delay
+
+val QuickGenres = listOf(
+    "Action", "Fantasy", "Romance", "Comedy", "Isekai", "Slice of Life",
+    "School", "Drama", "Supernatural", "Sci-Fi", "Mystery", "Sports",
+)
+
+@Composable
+fun HomeRoute(
+    onAnimeClick: (Anime) -> Unit,
+    onContinue: (WatchHistoryEntity) -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    onSchedule: () -> Unit,
+    onExplore: (genre: String?) -> Unit,
+) {
+    val vm: HomeViewModel = fuwaViewModel { c, _ -> HomeViewModel(c.animeRepository, c.libraryRepository) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    HomeScreen(state, vm.today.label, vm::refresh, onAnimeClick, onContinue, onSearch, onSettings, onSchedule, onExplore)
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun HomeScreen(
+    state: HomeUiState,
+    todayLabel: String,
+    onRefresh: () -> Unit,
+    onAnimeClick: (Anime) -> Unit,
+    onContinue: (WatchHistoryEntity) -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    onSchedule: () -> Unit,
+    onExplore: (String?) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val feed = state.feed
+
+    PullToRefreshBox(isRefreshing = feed.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+            item(key = "hero") {
+                if (feed.loading && state.hero.isEmpty()) {
+                    SkeletonBox(Modifier.fillMaxWidth().height(500.dp), shape = MaterialTheme.shapes.extraSmall)
+                } else if (state.hero.isNotEmpty()) {
+                    HeroPager(state.hero, onAnimeClick)
+                } else {
+                    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars).height(72.dp))
+                }
+            }
+
+            if (feed.error != null && feed.popular.isEmpty()) {
+                item { ErrorState(feed.error, onRefresh) }
+            }
+
+            if (state.continueWatching.isNotEmpty()) {
+                item(key = "cw") {
+                    Section("Lanjutkan Nonton") {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(state.continueWatching, key = { it.episodeId }) { entry ->
+                                ContinueWatchingCard(entry, onClick = { onContinue(entry) })
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (feed.loading || feed.today.isNotEmpty()) {
+                item(key = "today") {
+                    Section("Tayang Hari Ini", subtitle = todayLabel, onSeeAll = onSchedule) {
+                        PosterRow(feed.today, feed.loading, onAnimeClick, caption = { a ->
+                            a.nextAirTime.takeIf { it.isNotBlank() }?.let { "Rilis ${airTime(it)}" }
+                        })
+                    }
+                }
+            }
+
+            if (feed.loading || feed.thisSeason.isNotEmpty()) {
+                item(key = "season") {
+                    Section("Sedang Tayang", subtitle = "Anime ongoing musim ini") {
+                        PosterRow(feed.thisSeason, feed.loading, onAnimeClick, caption = { "${compactNumber(it.views)} ditonton" })
+                    }
+                }
+            }
+
+            item(key = "popular") {
+                Section("Terpopuler", subtitle = "Paling banyak ditonton", onSeeAll = { onExplore(null) }) {
+                    PosterRow(feed.popular.take(20), feed.loading, onAnimeClick, caption = { "${compactNumber(it.views)} ditonton" })
+                }
+            }
+
+            item(key = "genres") {
+                Section("Jelajahi Genre") {
+                    FlowRow(
+                        Modifier.padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
+                    ) {
+                        QuickGenres.forEach { g -> SuggestionChip(onClick = { onExplore(g) }, label = { Text(g) }) }
+                    }
+                }
+            }
+        }
+
+        HomeTopBar(
+            solid = remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }.value,
+            onSearch = onSearch,
+            onSettings = onSettings,
+        )
+    }
+}
+
+@Composable
+private fun Section(
+    title: String,
+    subtitle: String? = null,
+    onSeeAll: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    Column(Modifier.padding(top = 24.dp)) {
+        SectionHeader(title, subtitle = subtitle, onSeeAll = onSeeAll)
+        Spacer(Modifier.height(12.dp))
+        content()
+    }
+}
+
+@Composable
+private fun HomeTopBar(solid: Boolean, onSearch: () -> Unit, onSettings: () -> Unit) {
+    val bg by animateColorAsState(
+        if (solid) MaterialTheme.colorScheme.surface.copy(alpha = 0.96f) else Color.Transparent,
+        label = "topbarBg",
+    )
+    val scrim = Brush.verticalGradient(listOf(Color.Black.copy(alpha = if (solid) 0f else 0.55f), Color.Transparent))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .background(scrim)
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Wordmark(onDark = !solid)
+        Spacer(Modifier.weight(1f))
+        val tint = if (solid) MaterialTheme.colorScheme.onSurface else Color.White
+        IconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, "Cari", tint = tint) }
+        IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Pengaturan", tint = tint) }
+    }
+}
+
+@Composable
+fun Wordmark(onDark: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "Fuwa",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+            color = if (onDark) Color.White else MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "Nime",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun HeroPager(items: List<Anime>, onOpen: (Anime) -> Unit) {
+    val pager = rememberPagerState { items.size }
+    LaunchedEffect(pager, items.size) {
+        while (items.size > 1) {
+            delay(6_000)
+            if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % items.size)
+        }
+    }
+    val background = MaterialTheme.colorScheme.background
+    Box {
+        HorizontalPager(pager, Modifier.fillMaxWidth().height(520.dp)) { page ->
+            val anime = items[page]
+            Box(Modifier.fillMaxSize().clickable { onOpen(anime) }) {
+                NetImage(anime.backdrop, Modifier.fillMaxSize().fadeToBackground(background), anime.title)
+                Column(
+                    Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 36.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        StatusPill(anime.status)
+                        if (anime.type.isNotBlank()) Pill(anime.type)
+                        if (anime.displayYear.isNotBlank()) Pill(anime.displayYear)
+                        Pill(
+                            compactNumber(anime.views),
+                            leading = Icons.Rounded.Visibility,
+                            container = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.8f),
+                            content = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        anime.title,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (anime.genres.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            anime.genres.take(4).joinToString("  •  "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { onOpen(anime) }, contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
+                            Icon(Icons.Rounded.PlayArrow, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Tonton Sekarang")
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        FilledTonalIconButton(
+                            onClick = { onOpen(anime) },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(),
+                        ) { Icon(Icons.Rounded.Info, "Detail") }
+                    }
+                }
+            }
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            repeat(items.size) { i ->
+                val selected = pager.currentPage == i
+                val w by animateDpAsState(if (selected) 20.dp else 6.dp, label = "dot")
+                Box(
+                    Modifier
+                        .height(6.dp)
+                        .width(w)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        ),
+                )
+            }
+        }
+    }
+}

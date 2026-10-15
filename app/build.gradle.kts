@@ -9,7 +9,7 @@ plugins {
 val releaseKeystore = System.getenv("KEYSTORE_PATH")?.let { file(it) }?.takeIf { it.exists() }
 
 android {
-  namespace = "com.example"
+  namespace = "com.fuwanime"
   compileSdk = 36
 
   defaultConfig {

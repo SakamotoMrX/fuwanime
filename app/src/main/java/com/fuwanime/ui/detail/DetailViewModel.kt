@@ -1,0 +1,178 @@
+package com.fuwanime.ui.detail
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.fuwanime.data.Anime
+import com.fuwanime.data.AnimeRepository
+import com.fuwanime.data.Episode
+import com.fuwanime.data.LibraryRepository
+import com.fuwanime.data.local.WatchHistoryEntity
+import com.fuwanime.data.remote.AnimeApiService.Companion.EPISODE_PAGE_SIZE
+import com.fuwanime.util.friendlyMessage
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.math.ceil
+
+/** A page of episodes as shown in the range picker, e.g. "1–30". */
+data class EpisodeRange(val page: Int, val label: String)
+
+data class DetailUiState(
+    val anime: Anime? = null,
+    val loadingInfo: Boolean = true,
+    val infoError: String? = null,
+    val latestEpisode: Double? = null,
+    val ranges: List<EpisodeRange> = emptyList(),
+    val selectedPage: Int? = null,
+    val episodes: List<Episode> = emptyList(),
+    val loadingEpisodes: Boolean = true,
+    val episodesError: String? = null,
+    val newestFirst: Boolean = false,
+    val episodeQuery: String = "",
+    /** Earliest episode of the series; the primary button plays it when there is no history. */
+    val firstEpisode: Episode? = null,
+)
+
+class DetailViewModel(
+    private val repo: AnimeRepository,
+    private val library: LibraryRepository,
+    saved: SavedStateHandle,
+) : ViewModel() {
+
+    val animeId: String = checkNotNull(saved["animeId"])
+
+    private val _state = MutableStateFlow(DetailUiState(anime = repo.cachedAnime(animeId)))
+    val state: StateFlow<DetailUiState> = _state.asStateFlow()
+
+    val isFavorite: StateFlow<Boolean> =
+        library.isFavorite(animeId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val progress: StateFlow<Map<String, WatchHistoryEntity>> =
+        library.progressFor(animeId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private var episodeJob: Job? = null
+    private var searchJob: Job? = null
+
+    init {
+        loadInfo()
+        loadEpisodes()
+    }
+
+    fun loadInfo() {
+        _state.update { it.copy(loadingInfo = true, infoError = null) }
+        viewModelScope.launch {
+            repo.detail(animeId)
+                .onSuccess { a -> _state.update { it.copy(anime = a, loadingInfo = false) } }
+                .onFailure { e -> _state.update { it.copy(loadingInfo = false, infoError = e.friendlyMessage()) } }
+        }
+    }
+
+    fun loadEpisodes() {
+        episodeJob?.cancel()
+        _state.update { it.copy(loadingEpisodes = true, episodesError = null) }
+        episodeJob = viewModelScope.launch {
+            val newest = repo.episodePage(animeId, 0).getOrElse { e ->
+                _state.update { it.copy(loadingEpisodes = false, episodesError = e.friendlyMessage()) }
+                return@launch
+            }
+            val latest = newest.maxOfOrNull { it.sortKey }?.takeIf { it != Double.MAX_VALUE }
+            val pageCount = when {
+                newest.size < EPISODE_PAGE_SIZE || latest == null -> 1
+                else -> ceil(latest / EPISODE_PAGE_SIZE).toInt().coerceAtLeast(1)
+            }
+            val ranges = buildRanges(pageCount, latest)
+
+            // Open on the page with the user's last-watched episode, otherwise on episode 1.
+            val history = library.continueWatching(500).first().firstOrNull { it.animeId == animeId }
+            val resumePage = history?.let { h ->
+                val n = h.episodeNumber.toDoubleOrNull()
+                if (latest != null && n != null) ((latest - n) / EPISODE_PAGE_SIZE).toInt().coerceIn(0, pageCount - 1) else null
+            }
+            val startPage = resumePage ?: (pageCount - 1)
+
+            _state.update { it.copy(latestEpisode = latest, ranges = ranges) }
+            selectPage(startPage)
+        }
+    }
+
+    private fun buildRanges(pageCount: Int, latest: Double?): List<EpisodeRange> {
+        if (pageCount <= 1 || latest == null) return listOf(EpisodeRange(0, "Semua"))
+        val top = latest.toInt()
+        // Ascending: oldest page (highest index) first.
+        return (pageCount - 1 downTo 0).map { page ->
+            val high = top - page * EPISODE_PAGE_SIZE
+            val low = (high - EPISODE_PAGE_SIZE + 1).coerceAtLeast(1)
+            EpisodeRange(page, "$low–$high")
+        }
+    }
+
+    fun selectPage(page: Int) {
+        _state.update { it.copy(selectedPage = page, loadingEpisodes = true, episodesError = null, episodeQuery = "") }
+        viewModelScope.launch {
+            repo.episodePage(animeId, page)
+                .onSuccess { eps ->
+                    if (eps.isEmpty() && page > 0) {
+                        // Our page-count estimate overshot (gaps in numbering); drop the empty range.
+                        _state.update { s -> s.copy(ranges = s.ranges.filterNot { it.page == page }) }
+                        selectPage(page - 1)
+                        return@onSuccess
+                    }
+                    if (_state.value.selectedPage == page) {
+                        _state.update { it.copy(episodes = eps, loadingEpisodes = false) }
+                        updatePrimary(eps, page)
+                    }
+                }
+                .onFailure { e -> _state.update { it.copy(loadingEpisodes = false, episodesError = e.friendlyMessage()) } }
+        }
+    }
+
+    private suspend fun updatePrimary(loaded: List<Episode>, page: Int) {
+        if (_state.value.firstEpisode != null) return
+        val lastPage = _state.value.ranges.maxOfOrNull { it.page } ?: 0
+        val pageEpisodes = if (page == lastPage) loaded else repo.episodePage(animeId, lastPage).getOrNull().orEmpty()
+        _state.update { it.copy(firstEpisode = pageEpisodes.minByOrNull { e -> e.sortKey }) }
+    }
+
+    fun toggleOrder() = _state.update { it.copy(newestFirst = !it.newestFirst) }
+
+    fun searchEpisode(query: String) {
+        val digits = query.filter { it.isDigit() || it == '.' }
+        _state.update { it.copy(episodeQuery = digits) }
+        searchJob?.cancel()
+        if (digits.isBlank()) {
+            _state.value.selectedPage?.let { selectPage(it) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(350)
+            _state.update { it.copy(loadingEpisodes = true, episodesError = null) }
+            repo.searchEpisodes(animeId, digits)
+                .onSuccess { eps ->
+                    // Exact match first, then the rest of the substring matches.
+                    val sorted = eps.sortedWith(compareBy<Episode> { it.number != digits }.thenBy { it.sortKey })
+                    _state.update { it.copy(episodes = sorted, loadingEpisodes = false) }
+                }
+                .onFailure { e -> _state.update { it.copy(loadingEpisodes = false, episodesError = e.friendlyMessage()) } }
+        }
+    }
+
+    fun toggleFavorite() {
+        val anime = _state.value.anime ?: return
+        viewModelScope.launch { library.setFavorite(anime, !isFavorite.value) }
+    }
+
+    /** Displayed list respects the order toggle; search results keep relevance order. */
+    fun displayed(state: DetailUiState): List<Episode> = when {
+        state.episodeQuery.isNotBlank() -> state.episodes
+        state.newestFirst -> state.episodes.sortedByDescending { it.sortKey }
+        else -> state.episodes.sortedBy { it.sortKey }
+    }
+}
