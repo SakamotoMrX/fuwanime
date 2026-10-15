@@ -5,8 +5,8 @@ Fork dari [YuzakiNetwork/fuwanime](https://github.com/YuzakiNetwork/fuwanime).
 
 ## Download
 
-APK terbaru ada di [Releases](../../releases). Build otomatis dari setiap commit ada di tab
-[Actions](../../actions) → pilih run → bagian *Artifacts*.
+APK terbaru ada di [Releases](../../releases). Setiap push ke `main` otomatis build APK dan
+langsung terbit sebagai rilis `build-N`; push tag `v*` terbit dengan nama versi itu.
 
 ## Fitur
 
@@ -32,8 +32,9 @@ Butuh JDK 17+ dan Android SDK 36.
 gradle assembleDebug
 ```
 
-CI (`.github/workflows/build.yml`) mem-build APK release bertanda tangan di setiap push ke `main`.
-Push tag `v*` (misalnya `v2.0.0`) untuk otomatis membuat GitHub Release.
+CI (`.github/workflows/build.yml`) mem-build APK release bertanda tangan dan menerbitkannya ke
+Releases di setiap push ke `main` atau tag `v*`. Jalankan manual lewat *Run workflow* (centang
+*smoke*) untuk tes di emulator plus screenshot; run manual tidak menerbitkan rilis.
 Keystore diambil dari secret repo `KEYSTORE_BASE64` dan `KEYSTORE_PASSWORD`.
 
 ## Struktur
