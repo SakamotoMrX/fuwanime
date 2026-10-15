@@ -1,5 +1,7 @@
 # Keep line numbers so crash stack traces stay readable.
 -keepattributes SourceFile,LineNumberTable
+# Retrofit reads generic return types (ApiResponse<T>) from method signatures.
+-keepattributes Signature,InnerClasses,EnclosingMethod,RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault
 -renamesourcefileattribute SourceFile
 
 # Moshi models use generated adapters (@JsonClass(generateAdapter = true));
