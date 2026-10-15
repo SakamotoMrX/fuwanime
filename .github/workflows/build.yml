@@ -46,7 +46,7 @@ jobs:
       - name: Build APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: gradle testReleaseUnitTest assembleRelease --stacktrace
+        run: gradle testDebugUnitTest assembleRelease --stacktrace
 
       - name: Rename APK
         run: |
