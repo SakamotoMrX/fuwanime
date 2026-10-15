@@ -112,6 +112,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.VideoSize
@@ -166,7 +167,28 @@ private class PlaybackState {
     var videoWidth by mutableIntStateOf(16)
     var videoHeight by mutableIntStateOf(9)
     var error by mutableStateOf<String?>(null)
+
+    /**
+     * Seek requested before the stream became seekable. The MKV files keep their seek index (Cues)
+     * at the end, so ExoPlayer reports the item unseekable until it has fetched it; seeking then
+     * would jump to 0:00. We hold the target and apply it once the index is in.
+     */
+    var pendingSeek by mutableStateOf<Long?>(null)
 }
+
+private fun ExoPlayer.seekSafely(positionMs: Long, playback: PlaybackState) {
+    val target = positionMs.coerceAtLeast(0).let { t -> if (duration > 0) t.coerceAtMost(duration - 1_000) else t }
+    if (isCurrentMediaItemSeekable) {
+        playback.pendingSeek = null
+        seekTo(target)
+    } else {
+        playback.pendingSeek = target
+    }
+    playback.position = target
+}
+
+/** Position the user expects to be at, counting a seek that is still waiting for the index. */
+private fun ExoPlayer.effectivePosition(playback: PlaybackState): Long = playback.pendingSeek ?: currentPosition
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -205,10 +227,19 @@ fun PlayerRoute(onBack: () -> Unit) {
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 Log.d(TAG, "timeline reason=$reason seekable=${player.isCurrentMediaItemSeekable} duration=${player.duration}")
+                val pending = playback.pendingSeek
+                if (pending != null && player.isCurrentMediaItemSeekable) {
+                    playback.pendingSeek = null
+                    player.seekTo(pending)
+                }
             }
 
             override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
                 Log.d(TAG, "discontinuity reason=$reason ${old.positionMs} -> ${new.positionMs}")
+            }
+
+            override fun onPlaybackParametersChanged(params: PlaybackParameters) {
+                Log.d(TAG, "speed=${params.speed}")
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {
@@ -239,6 +270,7 @@ fun PlayerRoute(onBack: () -> Unit) {
     LaunchedEffect(state.source?.url) {
         playback.error = null
         playback.ended = false
+        playback.pendingSeek = null
         val source = state.source ?: run {
             player.stop()
             return@LaunchedEffect
@@ -250,7 +282,7 @@ fun PlayerRoute(onBack: () -> Unit) {
 
     LaunchedEffect(player) {
         while (true) {
-            playback.position = player.currentPosition.coerceAtLeast(0)
+            playback.position = player.effectivePosition(playback).coerceAtLeast(0)
             playback.buffered = player.bufferedPosition.coerceAtLeast(0)
             playback.duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
             delay(250)
@@ -398,7 +430,6 @@ private fun VideoSurface(
     var hideJob by remember { mutableStateOf<Job?>(null) }
     var seekFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // (forward, seconds)
     var gestureLevel by remember { mutableStateOf<Pair<ImageVector, Float>?>(null) }
-    var skippedIntroFor by remember { mutableStateOf<String?>(null) }
 
     fun scheduleHide() {
         hideJob?.cancel()
@@ -442,9 +473,7 @@ private fun VideoSurface(
                         },
                         onDoubleTap = { offset ->
                             val forward = offset.x > size.width / 2
-                            val target = (player.currentPosition + if (forward) seekStepMs else -seekStepMs)
-                                .coerceIn(0, player.duration.coerceAtLeast(0))
-                            player.seekTo(target)
+                            player.seekSafely(player.effectivePosition(playback) + if (forward) seekStepMs else -seekStepMs, playback)
                             val prev = seekFeedback
                             val secs = if (prev != null && prev.first == forward) prev.second + settings.doubleTapSeekSeconds else settings.doubleTapSeekSeconds
                             seekFeedback = forward to secs
@@ -492,7 +521,7 @@ private fun VideoSurface(
         }
         gestureLevel?.let { (icon, level) -> LevelIndicator(icon, level, Modifier.align(Alignment.Center)) }
 
-        if (playback.buffering && playback.error == null && !state.loading) {
+        if ((playback.buffering || playback.pendingSeek != null) && playback.error == null && !state.loading) {
             CircularProgressIndicator(Modifier.align(Alignment.Center).size(48.dp), color = Color.White, strokeWidth = 3.dp)
         }
         if (state.loading) {
@@ -523,28 +552,6 @@ private fun VideoSurface(
                 onPrevious = onPrevious,
                 onInteract = ::scheduleHide,
             )
-        }
-
-        // Skip intro: offered during the first minutes of long episodes, once per episode.
-        val introWindow = playback.position in 5_000..240_000 && playback.duration > 10 * 60_000
-        AnimatedVisibility(
-            visible = introWindow && skippedIntroFor != state.episode.id && playback.error == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = if (fullscreen) 96.dp else 56.dp),
-        ) {
-            Button(
-                onClick = {
-                    player.seekTo(player.currentPosition + settings.skipIntroSeconds * 1000L)
-                    skippedIntroFor = state.episode.id
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(Icons.Rounded.FastForward, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Lewati Intro")
-            }
         }
 
         val error = state.error ?: playback.error
@@ -641,7 +648,7 @@ private fun Controls(
             horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 36.dp else 20.dp),
         ) {
             TransportButton(Icons.Rounded.SkipPrevious, "Episode sebelumnya", enabled = state.previous != null, onClick = { onPrevious(); onInteract() })
-            TransportButton(Icons.Rounded.FastRewind, "Mundur 10 detik", onClick = { player.seekBack(); onInteract() })
+            TransportButton(Icons.Rounded.FastRewind, "Mundur 10 detik", onClick = { player.seekSafely(player.effectivePosition(playback) - 10_000, playback); onInteract() })
             Surface(
                 shape = CircleShape,
                 color = Color.White.copy(alpha = 0.18f),
@@ -662,7 +669,7 @@ private fun Controls(
                     )
                 }
             }
-            TransportButton(Icons.Rounded.FastForward, "Maju 10 detik", onClick = { player.seekForward(); onInteract() })
+            TransportButton(Icons.Rounded.FastForward, "Maju 10 detik", onClick = { player.seekSafely(player.effectivePosition(playback) + 10_000, playback); onInteract() })
             TransportButton(Icons.Rounded.SkipNext, "Episode berikutnya", enabled = state.next != null, onClick = { onNext(); onInteract() })
         }
 
@@ -704,7 +711,7 @@ private fun Controls(
                         onInteract()
                     },
                     onValueChangeFinished = {
-                        scrubbing?.let { player.seekTo((it * duration).toLong()) }
+                        scrubbing?.let { player.seekSafely((it * duration).toLong(), playback) }
                         scrubbing = null
                     },
                     colors = SliderDefaults.colors(

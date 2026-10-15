@@ -69,11 +69,22 @@ adb shell input swipe 540 700 540 1600 400; sleep 2
 tap "Tonton Ep*" && shot 10-player 20; alive
 adb shell input tap 540 300
 shot 11-player-controls 1; alive
-# Seek checks: forward button, double-tap right, then capture where playback ended up.
-tap "Maju 10 detik"; sleep 1; tap "Maju 10 detik"; sleep 3
-adb shell input tap 900 360; sleep 0.1; adb shell input tap 900 360
-sleep 4; adb shell input tap 540 300
-shot 11b-after-seek 1; alive
+# Seek checks. Controls auto-hide, so re-show them before each interaction.
+controls() {
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+  adb shell cat /sdcard/ui.xml | grep -q 'Maju 10 detik' || adb shell input tap 540 300
+}
+sleep 1                                        # seek right after start: index may not be loaded yet
+controls; tap "Maju 10 detik"
+sleep 8
+controls; tap "Maju 10 detik"; tap "Maju 10 detik"
+sleep 3
+controls; adb shell input swipe 120 704 560 704 400   # drag the seek bar to ~half
+sleep 5
+controls; shot 11b-after-seek 1; alive
+controls; tap "Pengaturan video" && sleep 2 && tap "1.5x" && sleep 2
+adb shell input keyevent KEYCODE_BACK; sleep 3
+controls; shot 11c-after-speed 1; alive
 adb logcat -d -s FuwaPlayer:D ExoPlayerImpl:* MatroskaExtractor:* | tail -40
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1

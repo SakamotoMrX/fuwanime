@@ -18,7 +18,6 @@ APK terbaru ada di [Releases](../../releases). Build otomatis dari setiap commit
   - Pilih kualitas dan kecepatan (0.5×–2×), mode pas/isi layar
   - Ketuk dua kali untuk maju/mundur
   - Geser vertikal untuk kecerahan (kiri) dan volume (kanan) saat layar penuh
-  - Tombol *Lewati Intro*
   - Hitung mundur otomatis ke episode berikutnya
   - Picture-in-Picture (otomatis saat keluar aplikasi)
   - Melanjutkan dari posisi terakhir

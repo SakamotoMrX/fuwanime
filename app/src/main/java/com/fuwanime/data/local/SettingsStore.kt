@@ -20,8 +20,6 @@ data class AppSettings(
     val preferredQuality: Int = 720,
     val autoPlayNext: Boolean = true,
     val autoPip: Boolean = true,
-    /** Seconds jumped by the "Lewati Intro" button. */
-    val skipIntroSeconds: Int = 85,
     val doubleTapSeekSeconds: Int = 10,
 )
 
@@ -36,7 +34,6 @@ class SettingsStore(private val context: Context) {
         val preferredQuality = intPreferencesKey("preferred_quality")
         val autoPlayNext = booleanPreferencesKey("auto_play_next")
         val autoPip = booleanPreferencesKey("auto_pip")
-        val skipIntroSeconds = intPreferencesKey("skip_intro_seconds")
         val doubleTapSeekSeconds = intPreferencesKey("double_tap_seek_seconds")
     }
 
@@ -51,7 +48,6 @@ class SettingsStore(private val context: Context) {
             preferredQuality = this[Keys.preferredQuality] ?: d.preferredQuality,
             autoPlayNext = this[Keys.autoPlayNext] ?: d.autoPlayNext,
             autoPip = this[Keys.autoPip] ?: d.autoPip,
-            skipIntroSeconds = this[Keys.skipIntroSeconds] ?: d.skipIntroSeconds,
             doubleTapSeekSeconds = this[Keys.doubleTapSeekSeconds] ?: d.doubleTapSeekSeconds,
         )
     }
@@ -62,6 +58,5 @@ class SettingsStore(private val context: Context) {
     suspend fun setPreferredQuality(height: Int) = context.dataStore.edit { it[Keys.preferredQuality] = height }
     suspend fun setAutoPlayNext(enabled: Boolean) = context.dataStore.edit { it[Keys.autoPlayNext] = enabled }
     suspend fun setAutoPip(enabled: Boolean) = context.dataStore.edit { it[Keys.autoPip] = enabled }
-    suspend fun setSkipIntroSeconds(seconds: Int) = context.dataStore.edit { it[Keys.skipIntroSeconds] = seconds }
     suspend fun setDoubleTapSeekSeconds(seconds: Int) = context.dataStore.edit { it[Keys.doubleTapSeekSeconds] = seconds }
 }

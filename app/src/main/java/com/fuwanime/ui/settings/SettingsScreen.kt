@@ -4,6 +4,8 @@ import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +17,6 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteSweep
-import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.ManageSearch
@@ -150,11 +151,6 @@ fun SettingsRoute(onBack: () -> Unit) {
                     vm.update { setDoubleTapSeekSeconds(it) }
                 }
             }
-            item {
-                ChoiceRow(Icons.Rounded.FastForward, "Durasi \"Lewati Intro\"", listOf(80, 85, 90, 120), s.skipIntroSeconds, { "${it}s" }) {
-                    vm.update { setSkipIntroSeconds(it) }
-                }
-            }
 
             item { Group("Data") }
             item {
@@ -229,6 +225,7 @@ private fun ActionRow(icon: ImageVector, title: String, subtitle: String?, onCli
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> ChoiceRow(
     icon: ImageVector,
@@ -243,7 +240,7 @@ private fun <T> ChoiceRow(
             Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, end = 16.dp))
             Text(title, style = MaterialTheme.typography.bodyLarge)
         }
-        Row(Modifier.padding(start = 48.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.padding(start = 48.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { opt ->
                 FilterChip(selected = opt == selected, onClick = { onSelect(opt) }, label = { Text(label(opt)) })
             }
