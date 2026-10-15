@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -112,6 +113,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -130,6 +132,8 @@ import com.fuwanime.util.fuwaViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val TAG = "FuwaPlayer"
 
 private val Speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -197,6 +201,14 @@ fun PlayerRoute(onBack: () -> Unit) {
                 playback.ended = s == Player.STATE_ENDED
                 if (s == Player.STATE_READY) playback.error = null
                 if (s == Player.STATE_ENDED) vm.saveProgress(player.duration, player.duration)
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                Log.d(TAG, "timeline reason=$reason seekable=${player.isCurrentMediaItemSeekable} duration=${player.duration}")
+            }
+
+            override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                Log.d(TAG, "discontinuity reason=$reason ${old.positionMs} -> ${new.positionMs}")
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {

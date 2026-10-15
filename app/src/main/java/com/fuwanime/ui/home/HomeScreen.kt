@@ -1,5 +1,11 @@
 package com.fuwanime.ui.home
 
+import android.os.Build
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -114,7 +120,7 @@ private fun HomeScreen(
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
             item(key = "hero") {
                 if (feed.loading && state.hero.isEmpty()) {
-                    SkeletonBox(Modifier.fillMaxWidth().height(500.dp), shape = MaterialTheme.shapes.extraSmall)
+                    SkeletonBox(Modifier.fillMaxWidth().height(600.dp), shape = MaterialTheme.shapes.extraSmall)
                 } else if (state.hero.isNotEmpty()) {
                     HeroPager(state.hero, onAnimeClick)
                 } else {
@@ -250,54 +256,77 @@ private fun HeroPager(items: List<Anime>, onOpen: (Anime) -> Unit) {
         }
     }
     val background = MaterialTheme.colorScheme.background
+    // RenderEffect blur is Android 12+; older devices get a heavier scrim instead.
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     Box {
-        HorizontalPager(pager, Modifier.fillMaxWidth().height(520.dp)) { page ->
+        HorizontalPager(pager, Modifier.fillMaxWidth().height(600.dp)) { page ->
             val anime = items[page]
-            Box(Modifier.fillMaxSize().clickable { onOpen(anime) }) {
-                NetImage(anime.backdrop, Modifier.fillMaxSize().fadeToBackground(background), anime.title)
+            Box(Modifier.fillMaxSize()) {
+                NetImage(
+                    anime.poster,
+                    Modifier.fillMaxSize().then(if (canBlur) Modifier.blur(36.dp) else Modifier),
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0f to background.copy(alpha = if (canBlur) 0.35f else 0.7f),
+                            0.55f to background.copy(alpha = if (canBlur) 0.55f else 0.8f),
+                            1f to background,
+                        ),
+                    ),
+                )
                 Column(
-                    Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 36.dp),
+                    Modifier.align(Alignment.BottomCenter).padding(start = 24.dp, end = 24.dp, bottom = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        StatusPill(anime.status)
-                        if (anime.type.isNotBlank()) Pill(anime.type)
-                        if (anime.displayYear.isNotBlank()) Pill(anime.displayYear)
-                        Pill(
-                            compactNumber(anime.views),
-                            leading = Icons.Rounded.Visibility,
-                            container = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.8f),
-                            content = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                    NetImage(
+                        anime.poster,
+                        Modifier
+                            .width(176.dp)
+                            .aspectRatio(2f / 3f)
+                            .shadow(24.dp, MaterialTheme.shapes.large)
+                            .clip(MaterialTheme.shapes.large)
+                            .clickable { onOpen(anime) },
+                        anime.title,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Pill(
+                        "#${page + 1} Musim Ini",
+                        leading = Icons.Rounded.LocalFireDepartment,
+                        container = MaterialTheme.colorScheme.primary,
+                        content = MaterialTheme.colorScheme.onPrimary,
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         anime.title,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (anime.genres.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            anime.genres.take(4).joinToString("  •  "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        listOfNotNull(
+                            anime.type.takeIf { it.isNotBlank() },
+                            anime.displayYear.takeIf { it.isNotBlank() },
+                            "${compactNumber(anime.views)} ditonton",
+                        ).plus(anime.genres.take(2)).joinToString("  •  "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = { onOpen(anime) }, contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
+                        Button(onClick = { onOpen(anime) }, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)) {
                             Icon(Icons.Rounded.PlayArrow, null)
                             Spacer(Modifier.width(6.dp))
                             Text("Tonton Sekarang")
                         }
                         Spacer(Modifier.width(10.dp))
-                        FilledTonalIconButton(
-                            onClick = { onOpen(anime) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(),
-                        ) { Icon(Icons.Rounded.Info, "Detail") }
+                        FilledTonalIconButton(onClick = { onOpen(anime) }) { Icon(Icons.Rounded.Info, "Detail") }
                     }
                 }
             }

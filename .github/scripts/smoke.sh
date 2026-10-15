@@ -69,6 +69,12 @@ adb shell input swipe 540 700 540 1600 400; sleep 2
 tap "Tonton Ep*" && shot 10-player 20; alive
 adb shell input tap 540 300
 shot 11-player-controls 1; alive
+# Seek checks: forward button, double-tap right, then capture where playback ended up.
+tap "Maju 10 detik"; sleep 1; tap "Maju 10 detik"; sleep 3
+adb shell input tap 900 360; sleep 0.1; adb shell input tap 900 360
+sleep 4; adb shell input tap 540 300
+shot 11b-after-seek 1; alive
+adb logcat -d -s FuwaPlayer:D ExoPlayerImpl:* MatroskaExtractor:* | tail -40
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1
 shot 12-player-landscape 6; alive

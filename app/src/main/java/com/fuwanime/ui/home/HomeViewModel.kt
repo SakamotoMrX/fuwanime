@@ -33,10 +33,11 @@ data class HomeUiState(
     val feed: HomeFeed = HomeFeed(),
     val continueWatching: List<WatchHistoryEntity> = emptyList(),
 ) {
-    val hero: List<Anime> get() = (feed.thisSeason.sortedByDescending { it.views }.take(3) + feed.popular)
-        .distinctBy { it.id }
-        .filter { it.backdrop.isNotBlank() }
-        .take(6)
+    /** Most-watched titles airing this season; all-time popular only if the schedule is unavailable. */
+    val hero: List<Anime> get() = feed.thisSeason.ifEmpty { feed.popular }
+        .filter { it.poster.isNotBlank() }
+        .sortedByDescending { it.views }
+        .take(8)
 }
 
 class HomeViewModel(
