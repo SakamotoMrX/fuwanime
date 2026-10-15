@@ -1,7 +1,6 @@
 # FuwaNime
 
 Aplikasi Android untuk streaming anime, ditulis ulang dengan **Jetpack Compose + Material 3**.
-Fork dari [YuzakiNetwork/fuwanime](https://github.com/YuzakiNetwork/fuwanime).
 
 ## Download
 
