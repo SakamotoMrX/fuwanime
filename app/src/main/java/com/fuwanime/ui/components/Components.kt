@@ -187,7 +187,7 @@ fun PosterCard(
             maxLines = 2,
             minLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 2.dp, end = 2.dp, top = 8.dp),
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
         )
         if (caption != null) {
             Text(
@@ -196,7 +196,7 @@ fun PosterCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 2.dp),
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
     }

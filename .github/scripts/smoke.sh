@@ -26,8 +26,9 @@ tap() {
 import re, sys, xml.etree.ElementTree as ET
 needle = sys.argv[1].lower()
 for n in ET.parse('/tmp/ui.xml').iter('node'):
-    label = (n.get('text') or '') + ' ' + (n.get('content-desc') or '')
-    if needle in label.lower():
+    labels = [(n.get('text') or '').lower(), (n.get('content-desc') or '').lower()]
+    exact = needle in labels
+    if exact or (needle.endswith('*') and any(l.startswith(needle[:-1]) for l in labels)):
         x1, y1, x2, y2 = map(int, re.findall(r'\d+', n.get('bounds')))
         print((x1 + x2) // 2, (y1 + y2) // 2)
         break
@@ -65,7 +66,7 @@ tap "Tonton Sekarang" && shot 08-detail 10; alive
 adb shell input swipe 540 1600 540 700 400
 shot 09-detail-episodes 3; alive
 adb shell input swipe 540 700 540 1600 400; sleep 2
-tap "Tonton Ep" && shot 10-player 20; alive
+tap "Tonton Ep*" && shot 10-player 20; alive
 adb shell input tap 540 300
 shot 11-player-controls 1; alive
 adb shell settings put system accelerometer_rotation 0

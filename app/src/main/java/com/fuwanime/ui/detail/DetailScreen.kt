@@ -238,7 +238,9 @@ private fun DetailScreen(
             }
         }
 
-        val solid by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+        val solid by remember {
+            derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 520 }
+        }
         DetailTopBar(solid, anime?.title.orEmpty(), onBack)
     }
 }

@@ -10,6 +10,8 @@ import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.util.Day
 import com.fuwanime.util.friendlyMessage
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,27 +61,42 @@ class HomeViewModel(
     private fun load(refreshing: Boolean) {
         feed.update { it.copy(loading = !refreshing, refreshing = refreshing, error = null) }
         viewModelScope.launch {
-            val popularJob = async { anime.explore(page = 0, sort = SortOrder.POPULAR) }
-            // Every day's schedule together approximates "currently airing this season".
-            val dayJobs = Day.entries.map { day -> day to async { anime.schedule(day.apiValue) } }
-
-            val popular = popularJob.await()
-            val days = dayJobs.map { (day, job) -> day to job.await() }
-
-            val todayList = days.first { it.first == today }.second.getOrDefault(emptyList())
-            val season = days.flatMap { it.second.getOrDefault(emptyList()) }
-                .distinctBy { it.id }
-                .sortedByDescending { it.views }
-
-            val error = popular.exceptionOrNull()?.takeIf { season.isEmpty() }?.friendlyMessage()
-            feed.value = HomeFeed(
-                popular = popular.getOrDefault(feed.value.popular),
-                today = todayList,
-                thisSeason = season,
-                loading = false,
-                refreshing = false,
-                error = error,
-            )
+            // The network is often not ready at cold start; retry quietly before showing an error.
+            repeat(AUTO_RETRIES) { attempt ->
+                if (fetch(showError = attempt == AUTO_RETRIES - 1)) return@launch
+                delay(2_000L * (attempt + 1))
+            }
         }
+    }
+
+    /** Returns true when something useful was loaded. */
+    private suspend fun fetch(showError: Boolean): Boolean = coroutineScope {
+        val popularJob = async { anime.explore(page = 0, sort = SortOrder.POPULAR) }
+        // Every day's schedule together approximates "currently airing this season".
+        val dayJobs = Day.entries.map { day -> day to async { anime.schedule(day.apiValue) } }
+
+        val popular = popularJob.await()
+        val days = dayJobs.map { (day, job) -> day to job.await() }
+
+        val todayList = days.first { it.first == today }.second.getOrDefault(emptyList())
+        val season = days.flatMap { it.second.getOrDefault(emptyList()) }
+            .distinctBy { it.id }
+            .sortedByDescending { it.views }
+
+        val error = popular.exceptionOrNull()?.takeIf { season.isEmpty() }?.friendlyMessage()
+        if (error != null && !showError) return@coroutineScope false
+        feed.value = HomeFeed(
+            popular = popular.getOrDefault(feed.value.popular),
+            today = todayList,
+            thisSeason = season,
+            loading = false,
+            refreshing = false,
+            error = error,
+        )
+        error == null
+    }
+
+    private companion object {
+        const val AUTO_RETRIES = 3
     }
 }
