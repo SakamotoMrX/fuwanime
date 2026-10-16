@@ -156,6 +156,7 @@ fun FuwaNavHost() {
                     LibraryRoute(
                         onAnimeClick = openAnime,
                         onResume = { e -> nav.navigate(Routes.player(e.animeId, e.episodeId, e.episodeNumber)) },
+                        onPlayDownload = { d -> nav.navigate(Routes.player(d.animeId, d.episodeId, d.episodeNumber)) },
                     )
                 }
                 composable(

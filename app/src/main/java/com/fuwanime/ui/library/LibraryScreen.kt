@@ -51,6 +51,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.fuwanime.data.Anime
+import com.fuwanime.util.formatBytes
+import com.fuwanime.data.local.DownloadEntity
+import com.fuwanime.data.DownloadState
+import com.fuwanime.data.DownloadRepository
+import com.fuwanime.data.DownloadItem
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.Delete
 import com.fuwanime.data.LibraryRepository
 import com.fuwanime.data.local.FavoriteEntity
 import com.fuwanime.data.local.WatchHistoryEntity
@@ -66,7 +75,12 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-class LibraryViewModel(private val library: LibraryRepository) : ViewModel() {
+class LibraryViewModel(private val library: LibraryRepository, private val downloadRepo: DownloadRepository) : ViewModel() {
+    val downloads: StateFlow<List<DownloadItem>?> =
+        downloadRepo.downloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun deleteDownload(episodeId: String) = viewModelScope.launch { downloadRepo.delete(episodeId) }
+
     val history: StateFlow<List<WatchHistoryEntity>?> =
         library.continueWatching(500).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val favorites: StateFlow<List<FavoriteEntity>?> =
@@ -89,11 +103,16 @@ fun FavoriteEntity.toAnime() = Anime(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LibraryRoute(onAnimeClick: (Anime) -> Unit, onResume: (WatchHistoryEntity) -> Unit) {
-    val vm: LibraryViewModel = fuwaViewModel { c, _ -> LibraryViewModel(c.libraryRepository) }
+fun LibraryRoute(
+    onAnimeClick: (Anime) -> Unit,
+    onResume: (WatchHistoryEntity) -> Unit,
+    onPlayDownload: (DownloadEntity) -> Unit,
+) {
+    val vm: LibraryViewModel = fuwaViewModel { c, _ -> LibraryViewModel(c.libraryRepository, c.downloadRepository) }
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
-    val pager = rememberPagerState { 2 }
+    val pager = rememberPagerState { 3 }
     val scope = rememberCoroutineScope()
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -105,7 +124,7 @@ fun LibraryRoute(onAnimeClick: (Anime) -> Unit, onResume: (WatchHistoryEntity) -
             }
         }
         PrimaryTabRow(selectedTabIndex = pager.currentPage) {
-            listOf("Riwayat" to history?.size, "Favorit" to favorites?.size).forEachIndexed { i, (label, count) ->
+            listOf("Riwayat" to history?.size, "Favorit" to favorites?.size, "Unduhan" to downloads?.size).forEachIndexed { i, (label, count) ->
                 Tab(
                     selected = pager.currentPage == i,
                     onClick = { scope.launch { pager.animateScrollToPage(i) } },
@@ -116,7 +135,8 @@ fun LibraryRoute(onAnimeClick: (Anime) -> Unit, onResume: (WatchHistoryEntity) -
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> HistoryList(history, onResume, onAnimeClick, onRemove = { vm.removeHistory(it) })
-                else -> FavoriteGrid(favorites, onAnimeClick)
+                1 -> FavoriteGrid(favorites, onAnimeClick)
+                else -> DownloadList(downloads, onPlayDownload, onDelete = { vm.deleteDownload(it) })
             }
         }
     }
@@ -206,5 +226,98 @@ private fun FavoriteGrid(items: List<FavoriteEntity>?, onAnimeClick: (Anime) -> 
             val anime = fav.toAnime()
             PosterCard(anime, onClick = { onAnimeClick(anime) })
         }
+    }
+}
+
+@Composable
+private fun DownloadList(
+    items: List<DownloadItem>?,
+    onPlay: (DownloadEntity) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    if (items == null) return
+    if (items.isEmpty()) {
+        MessageState(
+            Icons.Rounded.DownloadForOffline,
+            "Belum ada unduhan",
+            message = "Ketuk ikon download di daftar episode atau di pemutar untuk menonton tanpa internet.",
+        )
+        return
+    }
+    var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
+    val stored = items.filter { it.state == DownloadState.DONE }.sumOf { it.totalBytes }
+
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text(
+                "${items.count { it.state == DownloadState.DONE }} episode tersimpan • ${formatBytes(stored)}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+        items(items, key = { it.entity.episodeId }) { d ->
+            val e = d.entity
+            val playable = d.state == DownloadState.DONE
+            Row(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                    .clickable(enabled = playable) { onPlay(e) }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(140.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)) {
+                    NetImage(e.episodeThumbnail.ifBlank { e.animePoster }, Modifier.fillMaxSize())
+                    if (playable) {
+                        Icon(
+                            Icons.Rounded.PlayCircle, null, tint = Color.White,
+                            modifier = Modifier.align(Alignment.Center).size(32.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(e.animeTitle, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("Episode ${e.episodeNumber} • ${e.quality}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        when (d.state) {
+                            DownloadState.DONE -> formatBytes(d.totalBytes)
+                            DownloadState.QUEUED -> "Menunggu antrean…"
+                            DownloadState.PAUSED -> "Dijeda, menunggu jaringan…"
+                            DownloadState.RUNNING -> "${(d.progress * 100).toInt()}% • ${formatBytes(d.downloadedBytes)}"
+                            DownloadState.FAILED -> "Gagal. Hapus lalu download ulang"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (d.state == DownloadState.FAILED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (d.inProgress) {
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { d.progress },
+                            modifier = Modifier.fillMaxWidth().height(3.dp),
+                            drawStopIndicator = {},
+                            gapSize = 0.dp,
+                        )
+                    }
+                }
+                IconButton(onClick = { pendingDelete = d }) {
+                    Icon(if (d.inProgress) Icons.Rounded.Close else Icons.Rounded.Delete, if (d.inProgress) "Batalkan" else "Hapus")
+                }
+            }
+        }
+    }
+
+    pendingDelete?.let { d ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(if (d.inProgress) "Batalkan download?" else "Hapus download?") },
+            text = { Text("${d.entity.animeTitle} Episode ${d.entity.episodeNumber}") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(d.entity.episodeId)
+                    pendingDelete = null
+                }) { Text(if (d.inProgress) "Batalkan" else "Hapus") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Tutup") } },
+        )
     }
 }

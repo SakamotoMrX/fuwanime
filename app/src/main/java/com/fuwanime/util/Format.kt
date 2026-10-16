@@ -13,6 +13,18 @@ fun compactNumber(value: Long): String = when {
     else -> value.toString()
 }.replace(",0 ", " ")
 
+/** 1536 -> "1,5 KB", 734003200 -> "700 MB". */
+fun formatBytes(bytes: Long): String {
+    val units = listOf("B", "KB", "MB", "GB")
+    var value = bytes.coerceAtLeast(0).toDouble()
+    var unit = 0
+    while (value >= 1024 && unit < units.lastIndex) {
+        value /= 1024
+        unit++
+    }
+    return if (unit <= 1) "${value.toLong()} ${units[unit]}" else String.format(ID, "%.1f %s", value, units[unit]).replace(",0 ", " ")
+}
+
 fun formatDuration(ms: Long): String {
     val total = (ms.coerceAtLeast(0) / 1000)
     val h = total / 3600

@@ -123,6 +123,18 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.fuwanime.FuwaApp
+import com.fuwanime.util.formatBytes
+import com.fuwanime.data.DownloadState
+import com.fuwanime.data.DownloadItem
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.media3.datasource.DefaultDataSource
 import com.fuwanime.data.Episode
 import com.fuwanime.data.StreamSource
 import com.fuwanime.data.local.AppSettings
@@ -141,7 +153,9 @@ private val Speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 @OptIn(UnstableApi::class)
 private fun buildPlayer(context: Context): ExoPlayer {
     val client = (context.applicationContext as FuwaApp).container.videoHttpClient
-    val dataSource = OkHttpDataSource.Factory(client).setUserAgent(AnimeApiService.USER_AGENT)
+    val http = OkHttpDataSource.Factory(client).setUserAgent(AnimeApiService.USER_AGENT)
+    // DefaultDataSource routes file:// (offline downloads) locally and everything else through OkHttp.
+    val dataSource = DefaultDataSource.Factory(context, http)
     return ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
         .setSeekBackIncrementMs(10_000)
@@ -194,9 +208,17 @@ private fun ExoPlayer.effectivePosition(playback: PlaybackState): Long = playbac
 @Composable
 fun PlayerRoute(onBack: () -> Unit) {
     val vm: PlayerViewModel = fuwaViewModel { c, h ->
-        PlayerViewModel(c.animeRepository, c.libraryRepository, c.settingsStore, c.appScope, h)
+        PlayerViewModel(c.animeRepository, c.libraryRepository, c.downloadRepository, c.settingsStore, c.appScope, h)
     }
     val state by vm.state.collectAsStateWithLifecycle()
+    val download by vm.download.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            vm.messageShown()
+            snackbar.showSnackbar(it)
+        }
+    }
     val settings by vm.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -369,16 +391,25 @@ fun PlayerRoute(onBack: () -> Unit) {
     if (fullscreen || inPip) {
         videoArea(Modifier.fillMaxSize().background(Color.Black))
     } else {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            Box(Modifier.background(Color.Black).statusBarsPadding()) {
-                videoArea(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                Box(Modifier.background(Color.Black).statusBarsPadding()) {
+                    videoArea(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                }
+                EpisodeInfo(
+                    state = state,
+                    download = download,
+                    onSelectSource = { vm.selectSource(it, player.currentPosition) },
+                    onPlay = vm::play,
+                    onNext = vm::playNext,
+                    onPrevious = vm::playPrevious,
+                    onDownload = vm::downloadCurrent,
+                    onDeleteDownload = vm::deleteDownload,
+                )
             }
-            EpisodeInfo(
-                state = state,
-                onSelectSource = { vm.selectSource(it, player.currentPosition) },
-                onPlay = vm::play,
-                onNext = vm::playNext,
-                onPrevious = vm::playPrevious,
+            SnackbarHost(
+                snackbar,
+                Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars),
             )
         }
     }
@@ -811,10 +842,13 @@ private fun EndOverlay(next: Episode?, autoPlay: Boolean, onNext: () -> Unit, on
 @Composable
 private fun EpisodeInfo(
     state: PlayerUiState,
+    download: DownloadItem?,
     onSelectSource: (StreamSource) -> Unit,
     onPlay: (Episode) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onDownload: (StreamSource) -> Unit,
+    onDeleteDownload: () -> Unit,
 ) {
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -842,6 +876,8 @@ private fun EpisodeInfo(
                         Icon(Icons.Rounded.SkipNext, null)
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                DownloadRow(state, download, onDownload, onDeleteDownload)
             }
         }
         if (state.sources.size > 1) {
@@ -967,4 +1003,80 @@ private fun SheetTitle(text: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
     )
+}
+
+@Composable
+private fun DownloadRow(
+    state: PlayerUiState,
+    download: DownloadItem?,
+    onDownload: (StreamSource) -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    when {
+        download?.state == DownloadState.DONE -> OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.DownloadDone, null, tint = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.width(8.dp))
+            Text("Tersimpan offline • ${download.entity.quality}")
+        }
+
+        download?.inProgress == true -> Column(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Downloading, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when (download.state) {
+                        DownloadState.QUEUED -> "Menunggu antrean…"
+                        DownloadState.PAUSED -> "Dijeda, menunggu jaringan…"
+                        else -> "Mengunduh ${(download.progress * 100).toInt()}% • ${formatBytes(download.downloadedBytes)}" +
+                            if (download.totalBytes > 0) " / ${formatBytes(download.totalBytes)}" else ""
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onDelete) { Text("Batal") }
+            }
+            LinearProgressIndicator(
+                progress = { download.progress },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                drawStopIndicator = {},
+            )
+        }
+
+        else -> Box {
+            OutlinedButton(
+                onClick = { menuOpen = true },
+                enabled = state.sources.isNotEmpty() && !state.offline,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Rounded.Download, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (download?.state == DownloadState.FAILED) "Download gagal, coba lagi" else "Download untuk ditonton offline")
+            }
+            DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
+                state.sources.forEach { s ->
+                    DropdownMenuItem(
+                        text = { Text(s.quality) },
+                        leadingIcon = { Icon(Icons.Rounded.Download, null) },
+                        onClick = {
+                            menuOpen = false
+                            onDownload(s)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Hapus download?") },
+            text = { Text("File episode ini akan dihapus dari perangkat.") },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Hapus") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Batal") } },
+        )
+    }
 }

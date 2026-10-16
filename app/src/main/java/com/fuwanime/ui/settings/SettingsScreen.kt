@@ -17,6 +17,8 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.ManageSearch
@@ -149,6 +151,18 @@ fun SettingsRoute(onBack: () -> Unit) {
             item {
                 ChoiceRow(Icons.Rounded.TouchApp, "Ketuk dua kali untuk lompat", listOf(5, 10, 15, 30), s.doubleTapSeekSeconds, { "${it}s" }) {
                     vm.update { setDoubleTapSeekSeconds(it) }
+                }
+            }
+
+            item { Group("Unduhan") }
+            item {
+                ChoiceRow(Icons.Rounded.Download, "Kualitas download", listOf(360, 480, 720, 1080), s.downloadQuality, { "${it}p" }) {
+                    vm.update { setDownloadQuality(it) }
+                }
+            }
+            item {
+                SwitchRow(Icons.Rounded.Wifi, "Download hanya lewat Wi-Fi", "Hemat kuota, download menunggu sampai tersambung Wi-Fi", s.downloadWifiOnly) {
+                    vm.update { setDownloadWifiOnly(it) }
                 }
             }
 

@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fuwanime.data.Anime
 import com.fuwanime.data.AnimeRepository
+import com.fuwanime.data.DownloadItem
+import com.fuwanime.data.DownloadRepository
+import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.Episode
 import com.fuwanime.data.LibraryRepository
 import com.fuwanime.data.local.WatchHistoryEntity
@@ -44,6 +47,8 @@ data class DetailUiState(
 class DetailViewModel(
     private val repo: AnimeRepository,
     private val library: LibraryRepository,
+    private val downloads: DownloadRepository,
+    private val settings: SettingsStore,
     saved: SavedStateHandle,
 ) : ViewModel() {
 
@@ -161,6 +166,32 @@ class DetailViewModel(
                     _state.update { it.copy(episodes = sorted, loadingEpisodes = false) }
                 }
                 .onFailure { e -> _state.update { it.copy(loadingEpisodes = false, episodesError = e.friendlyMessage()) } }
+        }
+    }
+
+    /** episodeId -> download, for the per-episode download button. */
+    val downloadMap: StateFlow<Map<String, DownloadItem>> =
+        downloads.forAnime(animeId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val _messages = MutableStateFlow<String?>(null)
+    val messages: StateFlow<String?> = _messages.asStateFlow()
+    fun messageShown() { _messages.value = null }
+
+    fun download(episode: Episode) {
+        val anime = _state.value.anime ?: return
+        viewModelScope.launch {
+            val prefs = settings.settings.first()
+            _messages.value = "Menyiapkan Episode ${episode.number}…"
+            downloads.download(anime, episode, prefs.downloadQuality, prefs.downloadWifiOnly)
+                .onSuccess { _messages.value = "Episode ${episode.number} masuk antrean download" }
+                .onFailure { _messages.value = "Gagal download: ${it.friendlyMessage()}" }
+        }
+    }
+
+    fun deleteDownload(episode: Episode) {
+        viewModelScope.launch {
+            downloads.delete(episode.id)
+            _messages.value = "Download Episode ${episode.number} dihapus"
         }
     }
 
