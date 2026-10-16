@@ -133,7 +133,7 @@ fun LibraryRoute(
                 )
             }
         }
-        HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+        HorizontalPager(pager, Modifier.fillMaxSize(), verticalAlignment = Alignment.Top) { page ->
             when (page) {
                 0 -> HistoryList(history, onResume, onAnimeClick, onRemove = { vm.removeHistory(it) })
                 1 -> FavoriteGrid(favorites, onAnimeClick)
