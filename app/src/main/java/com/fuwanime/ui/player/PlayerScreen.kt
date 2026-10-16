@@ -865,15 +865,34 @@ private fun EpisodeInfo(
                 )
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onPrevious, enabled = state.previous != null, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Rounded.SkipPrevious, null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Sebelumnya")
+                    // Short "Ep N" labels so the text never wraps on narrow phones.
+                    OutlinedButton(
+                        onClick = onPrevious,
+                        enabled = state.previous != null,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Rounded.SkipPrevious, null, Modifier.size(20.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            state.previous?.let { "Ep ${it.number}" } ?: "Sebelumnya",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    Button(onClick = onNext, enabled = state.next != null, modifier = Modifier.weight(1f)) {
-                        Text("Berikutnya")
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Rounded.SkipNext, null)
+                    Button(
+                        onClick = onNext,
+                        enabled = state.next != null,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            state.next?.let { "Ep ${it.number}" } ?: "Berikutnya",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Rounded.SkipNext, null, Modifier.size(20.dp))
                     }
                 }
                 Spacer(Modifier.height(12.dp))
