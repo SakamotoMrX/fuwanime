@@ -65,6 +65,7 @@ adb shell input swipe 540 500 540 1600 300; sleep 2
 tap "Tonton Sekarang" && shot 08-detail 10; alive
 adb shell input swipe 540 1600 540 700 400
 shot 09-detail-episodes 3; alive
+tap "Download" && shot 09b-detail-download 10; alive
 adb shell input swipe 540 700 540 1600 400; sleep 2
 tap "Tonton Ep*" && shot 10-player 20; alive
 adb shell input tap 540 300
@@ -91,6 +92,11 @@ adb shell settings put system user_rotation 1
 shot 12-player-landscape 6; alive
 adb shell settings put system user_rotation 0
 sleep 3; alive
+
+# Downloads tab in Koleksi.
+adb shell input keyevent KEYCODE_BACK; sleep 2
+adb shell input keyevent KEYCODE_BACK; sleep 2
+tap "Koleksi" && sleep 2 && tap "Unduhan*" && shot 13-downloads 15; alive
 
 adb logcat -d -b crash | tail -40
 echo "Smoke test passed"

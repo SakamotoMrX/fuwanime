@@ -20,6 +20,7 @@ langsung terbit sebagai rilis `build-N`; push tag `v*` terbit dengan nama versi 
   - Hitung mundur otomatis ke episode berikutnya
   - Picture-in-Picture (otomatis saat keluar aplikasi)
   - Melanjutkan dari posisi terakhir
+- **Download offline**: simpan episode (pilih kualitas, opsi hanya Wi-Fi), tonton tanpa internet dari tab Koleksi → Unduhan
 - **Koleksi**: riwayat tontonan dengan progres, daftar favorit
 - **Pengaturan**: tema sistem/terang/gelap, Material You, hitam AMOLED, kualitas default, opsi pemutar
 

@@ -76,6 +76,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fuwanime.data.Anime
+import com.fuwanime.data.DownloadState
+import com.fuwanime.data.DownloadItem
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
 import com.fuwanime.data.Episode
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.ui.components.ErrorState
@@ -93,11 +101,23 @@ fun DetailRoute(
     onPlay: (anime: Anime, episode: Episode) -> Unit,
     onGenre: (String) -> Unit,
 ) {
-    val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h -> DetailViewModel(c.animeRepository, c.libraryRepository, h) }
+    val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h -> DetailViewModel(c.animeRepository, c.libraryRepository, c.downloadRepository, c.settingsStore, h) }
     val state by vm.state.collectAsStateWithLifecycle()
     val favorite by vm.isFavorite.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
-    DetailScreen(state, vm.displayed(state), favorite, progress, vm, onBack, onPlay, onGenre)
+    val downloads by vm.downloadMap.collectAsStateWithLifecycle()
+    val message by vm.messages.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let {
+            vm.messageShown()
+            snackbar.showSnackbar(it)
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        DetailScreen(state, vm.displayed(state), favorite, progress, downloads, vm, onBack, onPlay, onGenre)
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -107,6 +127,7 @@ private fun DetailScreen(
     episodes: List<Episode>,
     favorite: Boolean,
     progress: Map<String, WatchHistoryEntity>,
+    downloads: Map<String, DownloadItem>,
     vm: DetailViewModel,
     onBack: () -> Unit,
     onPlay: (Anime, Episode) -> Unit,
@@ -232,6 +253,9 @@ private fun DetailScreen(
                         ep,
                         progress[ep.id],
                         isResume = resume?.episodeId == ep.id,
+                        download = downloads[ep.id],
+                        onDownload = { vm.download(ep) },
+                        onDeleteDownload = { vm.deleteDownload(ep) },
                         onClick = { anime?.let { onPlay(it, ep) } },
                     )
                 }
@@ -401,7 +425,15 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
 }
 
 @Composable
-private fun EpisodeRow(ep: Episode, progress: WatchHistoryEntity?, isResume: Boolean, onClick: () -> Unit) {
+private fun EpisodeRow(
+    ep: Episode,
+    progress: WatchHistoryEntity?,
+    isResume: Boolean,
+    download: DownloadItem?,
+    onDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -448,6 +480,7 @@ private fun EpisodeRow(ep: Episode, progress: WatchHistoryEntity?, isResume: Boo
         if (progress?.isFinished == true) {
             Icon(Icons.Rounded.CheckCircle, "Sudah ditonton", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
         }
+        EpisodeDownloadButton(download, onDownload, onDeleteDownload)
     }
 }
 
@@ -486,5 +519,43 @@ private fun DetailTopBar(solid: Boolean, title: String, onBack: () -> Unit) {
                 modifier = Modifier.padding(start = 8.dp, end = 16.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun EpisodeDownloadButton(download: DownloadItem?, onDownload: () -> Unit, onDelete: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+        when {
+            download?.state == DownloadState.DONE ->
+                IconButton(onClick = { confirm = true }) {
+                    Icon(Icons.Rounded.DownloadDone, "Tersimpan offline", tint = MaterialTheme.colorScheme.tertiary)
+                }
+            download?.inProgress == true -> {
+                if (download.state == DownloadState.RUNNING && download.totalBytes > 0) {
+                    CircularProgressIndicator(progress = { download.progress }, modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                } else {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                }
+                IconButton(onClick = { confirm = true }) {} // tap to cancel
+            }
+            else -> IconButton(onClick = onDownload) {
+                Icon(
+                    if (download?.state == DownloadState.FAILED) Icons.Rounded.ErrorOutline else Icons.Rounded.Download,
+                    if (download?.state == DownloadState.FAILED) "Download gagal, coba lagi" else "Download",
+                    tint = if (download?.state == DownloadState.FAILED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    if (confirm) {
+        val running = download?.inProgress == true
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(if (running) "Batalkan download?" else "Hapus download?") },
+            text = { Text(if (running) "Download episode ini akan dihentikan." else "File episode ini akan dihapus dari perangkat.") },
+            confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text(if (running) "Batalkan" else "Hapus") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Tutup") } },
+        )
     }
 }

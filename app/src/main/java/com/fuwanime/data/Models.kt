@@ -53,6 +53,10 @@ data class StreamSource(
     val height: Int get() = Regex("""(\d{3,4})""").find(quality)?.value?.toIntOrNull() ?: 0
 }
 
+/** Source whose resolution is nearest the preferred height; unlabeled sources rank last. */
+fun List<StreamSource>.closestTo(preferredHeight: Int): StreamSource? =
+    minByOrNull { s -> if (s.height == 0) Int.MAX_VALUE else kotlin.math.abs(s.height - preferredHeight) }
+
 @Immutable
 data class EpisodeStream(
     val episode: Episode?,

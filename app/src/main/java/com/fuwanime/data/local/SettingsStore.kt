@@ -21,6 +21,9 @@ data class AppSettings(
     val autoPlayNext: Boolean = true,
     val autoPip: Boolean = true,
     val doubleTapSeekSeconds: Int = 10,
+    /** Downloads default lower than streaming to save storage. */
+    val downloadQuality: Int = 480,
+    val downloadWifiOnly: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -35,6 +38,8 @@ class SettingsStore(private val context: Context) {
         val autoPlayNext = booleanPreferencesKey("auto_play_next")
         val autoPip = booleanPreferencesKey("auto_pip")
         val doubleTapSeekSeconds = intPreferencesKey("double_tap_seek_seconds")
+        val downloadQuality = intPreferencesKey("download_quality")
+        val downloadWifiOnly = booleanPreferencesKey("download_wifi_only")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -49,6 +54,8 @@ class SettingsStore(private val context: Context) {
             autoPlayNext = this[Keys.autoPlayNext] ?: d.autoPlayNext,
             autoPip = this[Keys.autoPip] ?: d.autoPip,
             doubleTapSeekSeconds = this[Keys.doubleTapSeekSeconds] ?: d.doubleTapSeekSeconds,
+            downloadQuality = this[Keys.downloadQuality] ?: d.downloadQuality,
+            downloadWifiOnly = this[Keys.downloadWifiOnly] ?: d.downloadWifiOnly,
         )
     }
 
@@ -59,4 +66,6 @@ class SettingsStore(private val context: Context) {
     suspend fun setAutoPlayNext(enabled: Boolean) = context.dataStore.edit { it[Keys.autoPlayNext] = enabled }
     suspend fun setAutoPip(enabled: Boolean) = context.dataStore.edit { it[Keys.autoPip] = enabled }
     suspend fun setDoubleTapSeekSeconds(seconds: Int) = context.dataStore.edit { it[Keys.doubleTapSeekSeconds] = seconds }
+    suspend fun setDownloadQuality(height: Int) = context.dataStore.edit { it[Keys.downloadQuality] = height }
+    suspend fun setDownloadWifiOnly(enabled: Boolean) = context.dataStore.edit { it[Keys.downloadWifiOnly] = enabled }
 }
