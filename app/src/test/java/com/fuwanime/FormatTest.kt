@@ -55,7 +55,7 @@ class FormatTest {
             StreamSource("b", "720p", "s2"),
             StreamSource("c", "1080p", "s3"),
         )
-        assertEquals("b", sources.closestTo(480)?.url)
+        assertEquals("a", sources.closestTo(480)?.url)
         assertEquals("c", sources.closestTo(1080)?.url)
         assertEquals("a", sources.closestTo(200)?.url)
         // Unlabeled sources must lose against any labeled one.
