@@ -37,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -66,7 +65,7 @@ data class DaySchedule(
     val error: String? = null,
 )
 
-class ScheduleViewModel(private val repo: AnimeRepository, @Suppress("unused") saved: SavedStateHandle) : ViewModel() {
+class ScheduleViewModel(private val repo: AnimeRepository) : ViewModel() {
     private val _days = MutableStateFlow(Day.entries.associateWith { DaySchedule() })
     val days: StateFlow<Map<Day, DaySchedule>> = _days.asStateFlow()
 
@@ -92,7 +91,7 @@ class ScheduleViewModel(private val repo: AnimeRepository, @Suppress("unused") s
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleRoute(onAnimeClick: (Anime) -> Unit) {
-    val vm: ScheduleViewModel = fuwaViewModel { c, h -> ScheduleViewModel(c.animeRepository, h) }
+    val vm: ScheduleViewModel = fuwaViewModel { c, _ -> ScheduleViewModel(c.animeRepository) }
     val days by vm.days.collectAsStateWithLifecycle()
     val today = Day.today()
     val pager = rememberPagerState(initialPage = today.ordinal) { Day.entries.size }

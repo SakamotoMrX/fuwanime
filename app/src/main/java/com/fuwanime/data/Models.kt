@@ -26,6 +26,7 @@ data class Anime(
     val nextAirTime: String = "",
 ) {
     val isOngoing: Boolean get() = status.equals("ONGOING", ignoreCase = true)
+    val isUpcoming: Boolean get() = status.equals("UPCOMING", true) || status.equals("NOT_YET_AIRED", true)
     val displayYear: String get() = year.takeUnless { it.isBlank() || it.equals("UNKNOWN", true) }.orEmpty()
     val backdrop: String get() = cover.ifBlank { poster }
 }

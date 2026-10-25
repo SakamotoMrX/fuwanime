@@ -158,6 +158,14 @@ private fun buildPlayer(context: Context): ExoPlayer {
     val dataSource = DefaultDataSource.Factory(context, http)
     return ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+        // Request audio focus: music/podcast from another app pauses instead of overlapping.
+        .setAudioAttributes(
+            androidx.media3.common.AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            /* handleAudioFocus = */ true,
+        )
         .setSeekBackIncrementMs(10_000)
         .setSeekForwardIncrementMs(10_000)
         .setHandleAudioBecomingNoisy(true)
@@ -388,10 +396,10 @@ fun PlayerRoute(onBack: () -> Unit) {
         )
     }
 
-    if (fullscreen || inPip) {
-        videoArea(Modifier.fillMaxSize().background(Color.Black))
-    } else {
-        Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
+        if (fullscreen || inPip) {
+            videoArea(Modifier.fillMaxSize().background(Color.Black))
+        } else {
             Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                 Box(Modifier.background(Color.Black).statusBarsPadding()) {
                     videoArea(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
@@ -407,11 +415,12 @@ fun PlayerRoute(onBack: () -> Unit) {
                     onDeleteDownload = vm::deleteDownload,
                 )
             }
-            SnackbarHost(
-                snackbar,
-                Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars),
-            )
         }
+        // One snackbar host for both layouts so messages (download started/failed) are visible fullscreen too.
+        SnackbarHost(
+            snackbar,
+            Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars),
+        )
     }
 
     if (showSettings) {

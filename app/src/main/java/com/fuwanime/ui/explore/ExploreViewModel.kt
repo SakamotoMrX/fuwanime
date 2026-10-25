@@ -140,7 +140,7 @@ class ExploreViewModel(
                 when (f.status) {
                     StatusFilter.ALL -> true
                     StatusFilter.ONGOING -> a.isOngoing
-                    StatusFilter.FINISHED -> !a.isOngoing
+                    StatusFilter.FINISHED -> !a.isOngoing && !a.isUpcoming
                 }
         }
         _state.update { it.copy(results = filtered) }
