@@ -25,7 +25,7 @@ import androidx.compose.material.icons.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SquareNotifications
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -158,7 +158,7 @@ fun SettingsRoute(onBack: () -> Unit) {
             item { Group("Notifikasi") }
             item {
                 SwitchRow(
-                    Icons.Rounded.SquareNotifications,
+                    Icons.Rounded.NotificationsActive,
                     "Notifikasi episode baru",
                     "Cek anime favorit yang masih tayang setiap 6 jam",
                     s.notifyNewEpisodes,
