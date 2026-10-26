@@ -54,6 +54,7 @@ class DetailViewModel(
     private val library: LibraryRepository,
     private val downloads: DownloadRepository,
     private val settings: SettingsStore,
+    private val debugLog: (String) -> Unit,
     saved: SavedStateHandle,
 ) : ViewModel() {
 
@@ -92,7 +93,7 @@ class DetailViewModel(
     /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
     private suspend fun loadSimilar(anime: Anime) {
         val genres = anime.genres.take(2).map { it.lowercase() }
-        _messages.value = "DBG-start: genres=$genres"
+        debugLog("DBG-start: genres=$genres")
         if (genres.isEmpty()) return
         val result = repo.explore(0, SortOrder.POPULAR)
         val items = result.getOrNull().orEmpty()
@@ -105,9 +106,7 @@ class DetailViewModel(
             if (s.anime?.id != anime.id) return@update s.copy(similar = s.similar)
             s.copy(similar = matched)
         }
-        _messages.value =
-            "DBG-end items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} " +
-                "matched=${matched.size} err=$err"
+        debugLog("DBG-end: items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} matched=${matched.size} err=$err")
     }
 
     fun loadEpisodes() {

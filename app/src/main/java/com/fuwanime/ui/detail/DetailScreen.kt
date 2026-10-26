@@ -105,7 +105,16 @@ fun DetailRoute(
     onAnimeClick: (Anime) -> Unit,
     onGenre: (String) -> Unit,
 ) {
-    val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h -> DetailViewModel(c.animeRepository, c.libraryRepository, c.downloadRepository, c.settingsStore, h) }
+    val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h ->
+        DetailViewModel(
+            c.animeRepository,
+            c.libraryRepository,
+            c.downloadRepository,
+            c.settingsStore,
+            debugLog = { line -> c.debugLog(line) },
+            saved = h,
+        )
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val favorite by vm.isFavorite.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
