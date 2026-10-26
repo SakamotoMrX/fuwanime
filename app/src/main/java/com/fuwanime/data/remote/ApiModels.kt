@@ -18,6 +18,17 @@ data class MovieListData(
 )
 
 @JsonClass(generateAdapter = true)
+data class GenreListData(
+    @Json(name = "genre") val genre: List<GenreDto>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class GenreDto(
+    @Json(name = "id") val id: String = "",
+    @Json(name = "name") val name: String = "",
+)
+
+@JsonClass(generateAdapter = true)
 data class EpisodeListData(
     @Json(name = "episode") val episode: List<EpisodeDto>? = null,
 )

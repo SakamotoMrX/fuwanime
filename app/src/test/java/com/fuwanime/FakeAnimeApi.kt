@@ -4,6 +4,7 @@ import com.fuwanime.data.remote.AnimeApiService
 import com.fuwanime.data.remote.ApiResponse
 import com.fuwanime.data.remote.DetailData
 import com.fuwanime.data.remote.EpisodeListData
+import com.fuwanime.data.remote.GenreListData
 import com.fuwanime.data.remote.MovieListData
 import com.fuwanime.data.remote.StreamData
 
@@ -20,6 +21,11 @@ open class FakeAnimeApi : AnimeApiService {
         calls += "exploreByType(type=$type, page=$page, sort=$sort)"
         return ApiResponse(data = MovieListData(emptyList()))
     }
+
+    override suspend fun genres(): ApiResponse<GenreListData> = ApiResponse(data = GenreListData(emptyList()))
+
+    override suspend fun exploreByGenre(genreId: String, page: Int, sort: String): ApiResponse<MovieListData> =
+        ApiResponse(data = MovieListData(emptyList()))
 
     override suspend fun latestEpisodes(limit: Int): ApiResponse<MovieListData> = ApiResponse(data = MovieListData(emptyList()))
 

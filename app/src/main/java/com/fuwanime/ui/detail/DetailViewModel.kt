@@ -12,7 +12,7 @@ import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.Episode
 import com.fuwanime.data.LibraryRepository
 import com.fuwanime.data.SeasonEntry
-import com.fuwanime.data.SortOrder
+import com.fuwanime.data.rankSimilar
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.data.remote.AnimeApiService.Companion.EPISODE_PAGE_SIZE
 import com.fuwanime.util.friendlyMessage
@@ -49,7 +49,7 @@ data class DetailUiState(
     val episodeQuery: String = "",
     /** Earliest episode of the series; the primary button plays it when there is no history. */
     val firstEpisode: Episode? = null,
-    /** Popular anime sharing at least one genre, shown as "Anime Serupa". */
+    /** Titles with closely matching genres, shown as "Anime Serupa". */
     val similar: List<Anime> = emptyList(),
     /** Other seasons, movies and spin-offs of the same franchise, shown as "Season & Terkait". */
     val seasons: List<SeasonEntry> = emptyList(),
@@ -101,19 +101,13 @@ class DetailViewModel(
         }
     }
 
-    /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
+    /** Titles whose genres resemble this anime's, from a genre-filtered pool, without its own franchise. */
     private suspend fun loadSimilar(anime: Anime) {
-        val genres = anime.genres.take(2).map { it.lowercase() }
-        if (genres.isEmpty()) return
-        val items = repo.explore(0, SortOrder.POPULAR).getOrNull().orEmpty()
+        if (anime.genres.isEmpty()) return
+        val candidates = repo.similarCandidates(anime).getOrNull().orEmpty()
         _state.update { s ->
             if (s.anime?.id != anime.id) return@update s
-            s.copy(
-                similar = items.filter { candidate ->
-                    candidate.id != anime.id &&
-                        candidate.genres.any { genres.contains(it.lowercase()) }
-                }.take(12),
-            )
+            s.copy(similar = rankSimilar(anime, candidates, exclude = s.seasons.map { it.anime.id }.toSet()))
         }
     }
 

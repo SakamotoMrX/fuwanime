@@ -2,6 +2,9 @@ package com.fuwanime.data
 
 import com.fuwanime.data.remote.AnimeApiService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -25,6 +28,10 @@ class AnimeRepository(private val api: AnimeApiService) {
     private val episodeLock = Mutex()
 
     fun cachedAnime(id: String): Anime? = animeCache[id]
+
+    /** Lower-case genre name -> id for the genre endpoint; fetched once. */
+    @Volatile
+    private var genreIds: Map<String, String>? = null
 
     private fun remember(list: List<Anime>): List<Anime> {
         list.forEach { anime -> animeCache.merge(anime.id, anime, ::mergeAnime) }
@@ -56,6 +63,34 @@ class AnimeRepository(private val api: AnimeApiService) {
             val items = response.data?.movie.orEmpty()
             remember(items.map { it.toAnime() }.distinctBy { it.id })
         }
+
+    /**
+     * Pool for "Anime Serupa": the most watched titles of this anime's two most specific genres, filtered by the
+     * server. Falls back to the general popular list when the genre list is unavailable. Rank with [rankSimilar].
+     */
+    suspend fun similarCandidates(anime: Anime): Result<List<Anime>> = io {
+        val ids = genreIds ?: try {
+            api.genres().data?.genre.orEmpty()
+                .filter { it.id.isNotBlank() && it.name.isNotBlank() }
+                .associate { it.name.trim().lowercase() to it.id }
+                .also { if (it.isNotEmpty()) genreIds = it }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        val seeds = seedGenres(anime.genres).mapNotNull { ids[it.trim().lowercase()] }
+        val items = if (seeds.isEmpty()) {
+            api.explore(page = 0, sort = SortOrder.POPULAR.apiValue, keyword = "").data?.movie.orEmpty()
+        } else {
+            coroutineScope {
+                seeds.map { id -> async { api.exploreByGenre(id, 0, SortOrder.POPULAR.apiValue).data?.movie.orEmpty() } }
+                    .awaitAll()
+                    .flatten()
+            }
+        }
+        remember(items.map { it.toAnime() }.distinctBy { it.id })
+    }
 
     suspend fun latestReleases(limit: Int = 20): Result<List<LatestRelease>> = io {
         val releases = api.latestEpisodes(limit).data?.movie.orEmpty()

@@ -32,6 +32,17 @@ interface AnimeApiService {
     @GET("data/home/list_new_episode")
     suspend fun latestEpisodes(@Query("limit") limit: Int = 20): ApiResponse<MovieListData>
 
+    /** All genres with the ids [exploreByGenre] expects. */
+    @GET("3/2/explore/genre")
+    suspend fun genres(): ApiResponse<GenreListData>
+
+    @GET("3/2/explore/movie_genre")
+    suspend fun exploreByGenre(
+        @Query("id_genre") genreId: String,
+        @Query("page") page: Int = 0,
+        @Query("sort") sort: String = "views",
+    ): ApiResponse<MovieListData>
+
     @GET("3/2/schedule/data")
     suspend fun schedule(@Query("day") day: String): ApiResponse<MovieListData>
 
