@@ -2,6 +2,7 @@ package com.fuwanime.data
 
 import com.fuwanime.BuildConfig
 import com.fuwanime.data.local.SettingsStore
+import com.fuwanime.data.remote.GitHubApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
