@@ -28,6 +28,10 @@ interface AnimeApiService {
         @Query("sort") sort: String = "views",
     ): ApiResponse<MovieListData>
 
+    /** Titles with a recently released episode; `genre` holds the episode label, e.g. "Episode 5". */
+    @GET("data/home/list_new_episode")
+    suspend fun latestEpisodes(@Query("limit") limit: Int = 20): ApiResponse<MovieListData>
+
     @GET("3/2/schedule/data")
     suspend fun schedule(@Query("day") day: String): ApiResponse<MovieListData>
 

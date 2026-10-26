@@ -21,6 +21,8 @@ open class FakeAnimeApi : AnimeApiService {
         return ApiResponse(data = MovieListData(emptyList()))
     }
 
+    override suspend fun latestEpisodes(limit: Int): ApiResponse<MovieListData> = ApiResponse(data = MovieListData(emptyList()))
+
     override suspend fun schedule(day: String): ApiResponse<MovieListData> = ApiResponse(data = MovieListData(emptyList()))
 
     override suspend fun detail(animeId: String, idUser: String, keyClient: String): ApiResponse<DetailData> {

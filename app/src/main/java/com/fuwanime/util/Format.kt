@@ -59,6 +59,10 @@ enum class Day(val apiValue: String, val label: String, val short: String) {
 fun airTime(raw: String): String =
     Regex("""\d{4}-\d{2}-\d{2} (\d{2}:\d{2})""").find(raw)?.groupValues?.get(1) ?: raw
 
+fun episodeShortLabel(label: String): String = label
+
+fun relativeTime(raw: String, nowMs: Long = System.currentTimeMillis()): String = ""
+
 fun Throwable.friendlyMessage(): String = when (this) {
     is java.net.UnknownHostException -> "Tidak ada koneksi internet."
     is java.net.SocketTimeoutException -> "Server terlalu lama merespons."

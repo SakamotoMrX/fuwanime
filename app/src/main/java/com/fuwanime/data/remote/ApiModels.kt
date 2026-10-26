@@ -57,6 +57,7 @@ data class AnimeDto(
     @Json(name = "key_time") val keyTime: String? = null,
     /** Franchise label in detail's `season` array, e.g. "S1", "Movie". */
     @Json(name = "season") val season: String? = null,
+    @Json(name = "key_time_update") val keyTimeUpdate: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -67,6 +68,7 @@ data class EpisodeDto(
     @Json(name = "image") val image: String? = null,
     @Json(name = "key_time") val keyTime: String? = null,
     @Json(name = "views") val views: String? = null,
+    @Json(name = "is_new") val isNew: Any? = null,
 )
 
 @JsonClass(generateAdapter = true)

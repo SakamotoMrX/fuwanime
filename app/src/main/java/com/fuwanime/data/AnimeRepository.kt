@@ -56,6 +56,8 @@ class AnimeRepository(private val api: AnimeApiService) {
             remember(items.map { it.toAnime() }.distinctBy { it.id })
         }
 
+    suspend fun latestReleases(limit: Int = 20): Result<List<LatestRelease>> = TODO()
+
     suspend fun schedule(day: String): Result<List<Anime>> = io {
         remember(api.schedule(day.lowercase()).data?.movie.orEmpty().map { it.toAnime() })
     }

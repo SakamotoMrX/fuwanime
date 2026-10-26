@@ -39,6 +39,7 @@ data class Episode(
     val thumbnail: String = "",
     val releaseDate: String = "",
     val views: Long = 0,
+    val isNew: Boolean = false,
 ) {
     /** Numeric episode index for sorting; fractional episodes (e.g. 12.5) keep their order. */
     val sortKey: Double get() = number.toDoubleOrNull() ?: Double.MAX_VALUE
@@ -57,6 +58,10 @@ data class StreamSource(
 /** Source whose resolution is nearest the preferred height; unlabeled sources rank last. */
 fun List<StreamSource>.closestTo(preferredHeight: Int): StreamSource? =
     minByOrNull { s -> if (s.height == 0) Int.MAX_VALUE else kotlin.math.abs(s.height - preferredHeight) }
+
+/** A title from the latest-episodes feed. */
+@Immutable
+data class LatestRelease(val anime: Anime, val episodeLabel: String, val updatedAt: String)
 
 /** One entry of a title's franchise list ("S1", "Movie", …) from the detail response. */
 @Immutable
