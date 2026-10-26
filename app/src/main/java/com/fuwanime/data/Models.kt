@@ -55,9 +55,18 @@ data class StreamSource(
     val height: Int get() = Regex("""(\d{3,4})""").find(quality)?.value?.toIntOrNull() ?: 0
 }
 
+/** The best source below [current] that has not been tried yet; null when there is nothing lower. */
+fun List<StreamSource>.nextLowerThan(current: StreamSource, tried: Set<String>): StreamSource? =
+    filter { it.height in 1 until current.height && it.url !in tried }.maxByOrNull { it.height }
+
 /** Source whose resolution is nearest the preferred height; unlabeled sources rank last. */
 fun List<StreamSource>.closestTo(preferredHeight: Int): StreamSource? =
     minByOrNull { s -> if (s.height == 0) Int.MAX_VALUE else kotlin.math.abs(s.height - preferredHeight) }
+
+/** Where the opening sits in an anime's episodes, as marked by the user. */
+data class OpMark(val startMs: Long, val endMs: Long) {
+    val isValid: Boolean get() = endMs > startMs
+}
 
 /** A title from the latest-episodes feed. */
 @Immutable
