@@ -31,29 +31,56 @@ class AnimeRepository(private val api: AnimeApiService) {
         return list
     }
 
-    /** Detail responses carry fields (studio) list responses lack, and vice versa. */
+    /** Detail responses carry fields (studio) list responses lack, and vice versa; feeds without genres keep known ones. */
     private fun mergeAnime(old: Anime, new: Anime) = new.copy(
         studio = new.studio.ifBlank { old.studio },
         nextAirTime = new.nextAirTime.ifBlank { old.nextAirTime },
         cover = new.cover.ifBlank { old.cover },
         poster = new.poster.ifBlank { old.poster },
+        genres = new.genres.ifEmpty { old.genres },
     )
 
-    suspend fun explore(page: Int, sort: SortOrder = SortOrder.POPULAR, keyword: String = ""): Result<List<Anime>> =
+    suspend fun explore(
+        page: Int,
+        sort: SortOrder = SortOrder.POPULAR,
+        keyword: String = "",
+        type: String? = null,
+    ): Result<List<Anime>> =
         io {
-            val items = api.explore(page = page, sort = sort.apiValue, keyword = keyword.trim()).data?.movie.orEmpty()
+            // The type endpoint ignores keywords, so searches use the keyword endpoint and callers filter by type.
+            val response = if (type != null && keyword.isBlank()) {
+                api.exploreByType(type = type, page = page, sort = sort.apiValue)
+            } else {
+                api.explore(page = page, sort = sort.apiValue, keyword = keyword.trim())
+            }
+            val items = response.data?.movie.orEmpty()
             remember(items.map { it.toAnime() }.distinctBy { it.id })
         }
+
+    suspend fun latestReleases(limit: Int = 20): Result<List<LatestRelease>> = io {
+        val releases = api.latestEpisodes(limit).data?.movie.orEmpty()
+            .filter { it.id.isNotBlank() }
+            .map { it.toLatestRelease() }
+            .distinctBy { it.anime.id }
+        remember(releases.map { it.anime })
+        releases.map { r -> r.copy(anime = animeCache[r.anime.id] ?: r.anime) }
+    }
 
     suspend fun schedule(day: String): Result<List<Anime>> = io {
         remember(api.schedule(day.lowercase()).data?.movie.orEmpty().map { it.toAnime() })
     }
 
-    suspend fun detail(id: String): Result<Anime> = io {
+    /** Detail plus the franchise list ("S1", "Movie", …) that only the detail response carries. */
+    suspend fun detailWithSeasons(id: String): Result<AnimeDetail> = io {
         val data = api.detail(id).data
         val anime = data?.movie?.toAnime() ?: error("Anime tidak ditemukan")
-        animeCache.merge(id, anime, ::mergeAnime)!!
+        val seasons = data.season.orEmpty()
+            .filter { it.id.isNotBlank() }
+            .map { SeasonEntry(it.toAnime(), it.season?.trim().orEmpty()) }
+        AnimeDetail(animeCache.merge(id, anime, ::mergeAnime)!!, seasons)
     }
+
+    suspend fun detail(id: String): Result<Anime> = detailWithSeasons(id).map { it.anime }
 
     suspend fun episodePage(animeId: String, page: Int, forceRefresh: Boolean = false): Result<List<Episode>> = io {
         if (!forceRefresh) {

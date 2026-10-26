@@ -54,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -86,6 +87,8 @@ import com.fuwanime.ui.components.StatusPill
 import com.fuwanime.ui.components.fadeToBackground
 import com.fuwanime.util.airTime
 import com.fuwanime.util.compactNumber
+import com.fuwanime.util.episodeShortLabel
+import com.fuwanime.util.relativeTime
 import com.fuwanime.util.fuwaViewModel
 import kotlinx.coroutines.delay
 
@@ -174,6 +177,22 @@ private fun HomeScreen(
                                 ContinueWatchingCard(entry, onClick = { onContinue(entry) })
                             }
                         }
+                    }
+                }
+            }
+
+            if (feed.loading || feed.latest.isNotEmpty()) {
+                item(key = "latest") {
+                    Section("Episode Terbaru", subtitle = "Baru saja dirilis") {
+                        val releases = remember(feed.latest) { feed.latest.associateBy { it.anime.id } }
+                        PosterRow(feed.latest.map { it.anime }, feed.loading, onAnimeClick, caption = { a ->
+                            releases[a.id]?.let { r ->
+                                listOf(episodeShortLabel(r.episodeLabel), relativeTime(r.updatedAt))
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" • ")
+                                    .ifBlank { null }
+                            }
+                        })
                     }
                 }
             }

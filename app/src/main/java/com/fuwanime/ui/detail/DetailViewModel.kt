@@ -11,6 +11,7 @@ import com.fuwanime.data.DownloadState
 import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.Episode
 import com.fuwanime.data.LibraryRepository
+import com.fuwanime.data.SeasonEntry
 import com.fuwanime.data.SortOrder
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.data.remote.AnimeApiService.Companion.EPISODE_PAGE_SIZE
@@ -26,6 +27,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
+
+/** Franchise entries worth linking from a detail page. */
+fun relatedSeasons(currentId: String, seasons: List<SeasonEntry>): List<SeasonEntry> =
+    seasons.filter { it.anime.id.isNotBlank() && it.anime.id != currentId }.distinctBy { it.anime.id }
 
 /** A page of episodes as shown in the range picker, e.g. "1–30". */
 data class EpisodeRange(val page: Int, val label: String)
@@ -46,6 +51,8 @@ data class DetailUiState(
     val firstEpisode: Episode? = null,
     /** Popular anime sharing at least one genre, shown as "Anime Serupa". */
     val similar: List<Anime> = emptyList(),
+    /** Other seasons, movies and spin-offs of the same franchise, shown as "Season & Terkait". */
+    val seasons: List<SeasonEntry> = emptyList(),
 )
 
 class DetailViewModel(
@@ -78,10 +85,12 @@ class DetailViewModel(
     fun loadInfo() {
         _state.update { it.copy(loadingInfo = true, infoError = null) }
         viewModelScope.launch {
-            repo.detail(animeId)
-                .onSuccess { a ->
-                    _state.update { it.copy(anime = a, loadingInfo = false) }
-                    loadSimilar(a)
+            repo.detailWithSeasons(animeId)
+                .onSuccess { d ->
+                    _state.update {
+                        it.copy(anime = d.anime, loadingInfo = false, seasons = relatedSeasons(animeId, d.seasons))
+                    }
+                    loadSimilar(d.anime)
                 }
                 .onFailure { e -> _state.update { it.copy(loadingInfo = false, infoError = e.friendlyMessage()) } }
         }

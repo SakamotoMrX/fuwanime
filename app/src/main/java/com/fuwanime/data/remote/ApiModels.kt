@@ -25,7 +25,8 @@ data class EpisodeListData(
 @JsonClass(generateAdapter = true)
 data class DetailData(
     @Json(name = "movie") val movie: AnimeDto? = null,
-    @Json(name = "episode") val episode: List<EpisodeDto>? = null,
+    // `episode` is deliberately not mapped: unused, and its shape varies (an object here, a list elsewhere).
+    @Json(name = "season") val season: List<AnimeDto>? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -53,6 +54,9 @@ data class AnimeDto(
     @Json(name = "aired_start") val airedStart: String? = null,
     @Json(name = "genre") val genre: String? = null,
     @Json(name = "key_time") val keyTime: String? = null,
+    /** Franchise label in detail's `season` array, e.g. "S1", "Movie". */
+    @Json(name = "season") val season: String? = null,
+    @Json(name = "key_time_update") val keyTimeUpdate: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -63,6 +67,7 @@ data class EpisodeDto(
     @Json(name = "image") val image: String? = null,
     @Json(name = "key_time") val keyTime: String? = null,
     @Json(name = "views") val views: String? = null,
+    @Json(name = "is_new") val isNew: Any? = null,
 )
 
 @JsonClass(generateAdapter = true)
