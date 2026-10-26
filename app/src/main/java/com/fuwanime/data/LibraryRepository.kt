@@ -15,6 +15,8 @@ class LibraryRepository(db: FuwaDatabase) {
 
     val favoriteList: Flow<List<FavoriteEntity>> = favorites.observeAll()
 
+    suspend fun allFavorites(): List<FavoriteEntity> = favorites.allFavorites()
+
     fun isFavorite(animeId: String): Flow<Boolean> = favorites.observeIsFavorite(animeId)
 
     suspend fun setFavorite(anime: Anime, favorite: Boolean) {

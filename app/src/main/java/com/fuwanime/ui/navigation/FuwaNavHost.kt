@@ -32,6 +32,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -85,11 +86,19 @@ private fun NavHostController.navigateTab(route: String) = navigate(route) {
 }
 
 @Composable
-fun FuwaNavHost() {
+fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Unit = {}) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val destination = backStack?.destination
     val currentTab = Tab.entries.firstOrNull { tab -> destination?.hierarchy?.any { it.route == tab.route } == true }
+
+    // Deep link from a "new episode" notification: jump straight to the detail screen.
+    LaunchedEffect(initialAnimeId) {
+        if (initialAnimeId != null) {
+            nav.navigate(Routes.detail(initialAnimeId))
+            onInitialAnimeConsumed()
+        }
+    }
 
     val openAnime: (Anime) -> Unit = { nav.navigate(Routes.detail(it.id)) }
     val play: (String, Episode) -> Unit = { animeId, ep -> nav.navigate(Routes.player(animeId, ep.id, ep.number)) }
@@ -168,6 +177,7 @@ fun FuwaNavHost() {
                     DetailRoute(
                         onBack = { nav.popBackStack() },
                         onPlay = { anime, ep -> play(anime.id, ep) },
+                        onAnimeClick = openAnime,
                         onGenre = { g -> openExplore(g, false) },
                     )
                 }

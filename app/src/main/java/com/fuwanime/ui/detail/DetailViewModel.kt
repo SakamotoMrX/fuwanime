@@ -7,9 +7,11 @@ import com.fuwanime.data.Anime
 import com.fuwanime.data.AnimeRepository
 import com.fuwanime.data.DownloadItem
 import com.fuwanime.data.DownloadRepository
+import com.fuwanime.data.DownloadState
 import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.Episode
 import com.fuwanime.data.LibraryRepository
+import com.fuwanime.data.SortOrder
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.data.remote.AnimeApiService.Companion.EPISODE_PAGE_SIZE
 import com.fuwanime.util.friendlyMessage
@@ -42,6 +44,8 @@ data class DetailUiState(
     val episodeQuery: String = "",
     /** Earliest episode of the series; the primary button plays it when there is no history. */
     val firstEpisode: Episode? = null,
+    /** Popular anime sharing at least one genre, shown as "Anime Serupa". */
+    val similar: List<Anime> = emptyList(),
 )
 
 class DetailViewModel(
@@ -75,8 +79,27 @@ class DetailViewModel(
         _state.update { it.copy(loadingInfo = true, infoError = null) }
         viewModelScope.launch {
             repo.detail(animeId)
-                .onSuccess { a -> _state.update { it.copy(anime = a, loadingInfo = false) } }
+                .onSuccess { a ->
+                    _state.update { it.copy(anime = a, loadingInfo = false) }
+                    loadSimilar(a)
+                }
                 .onFailure { e -> _state.update { it.copy(loadingInfo = false, infoError = e.friendlyMessage()) } }
+        }
+    }
+
+    /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
+    private suspend fun loadSimilar(anime: Anime) {
+        val genres = anime.genres.take(2).map { it.lowercase() }
+        if (genres.isEmpty()) return
+        val items = repo.explore(0, SortOrder.POPULAR).getOrNull().orEmpty()
+        _state.update { s ->
+            if (s.anime?.id != anime.id) return@update s
+            s.copy(
+                similar = items.filter { candidate ->
+                    candidate.id != anime.id &&
+                        candidate.genres.any { genres.contains(it.lowercase()) }
+                }.take(12),
+            )
         }
     }
 
@@ -186,6 +209,44 @@ class DetailViewModel(
                 .onSuccess { _messages.value = "Episode ${episode.number} masuk antrean download" }
                 .onFailure { _messages.value = "Gagal download: ${it.friendlyMessage()}" }
         }
+    }
+
+    /** Bulk-download up to [MAX_BULK_DOWNLOAD] episodes, skipping ones already stored or queued. */
+    fun downloadAllEpisodes() {
+        val anime = _state.value.anime ?: return
+        viewModelScope.launch {
+            val newest = repo.episodePage(animeId, 0).getOrNull()?.maxByOrNull { it.sortKey }
+            if (newest == null || newest.sortKey == Double.MAX_VALUE) {
+                _messages.value = "Belum ada episode untuk diunduh."
+                return@launch
+            }
+            val pageCount = ceil(newest.sortKey / EPISODE_PAGE_SIZE).toInt().coerceAtLeast(1)
+            val inFlight = downloads.forAnime(animeId).first()
+            val all = (pageCount - 1 downTo 0).flatMap { page ->
+                repo.episodePage(animeId, page).getOrNull().orEmpty()
+            }
+            val targets = all
+                .filter { ep -> inFlight[ep.id]?.let { it.state == DownloadState.DONE || it.inProgress } != true }
+                .sortedByDescending { it.sortKey }
+                .take(MAX_BULK_DOWNLOAD)
+            if (targets.isEmpty()) {
+                _messages.value = "Semua episode sudah tersimpan atau sedang diunduh."
+                return@launch
+            }
+            val prefs = settings.settings.first()
+            _messages.value = "Menyiapkan ${targets.size} episode…"
+            var queued = 0
+            for (ep in targets.sortedBy { it.sortKey }) {
+                downloads.download(anime, ep, prefs.downloadQuality, prefs.downloadWifiOnly)
+                    .onSuccess { queued++ }
+            }
+            _messages.value = "$queued episode masuk antrean download"
+        }
+    }
+
+    private companion object {
+        /** Guard so "unduh semua" on long-running shows never explodes into 1000 stream requests. */
+        const val MAX_BULK_DOWNLOAD = 30
     }
 
     fun deleteDownload(episode: Episode) {

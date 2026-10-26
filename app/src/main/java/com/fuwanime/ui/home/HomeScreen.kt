@@ -37,9 +37,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +51,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -55,7 +60,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fuwanime.data.Anime
+import com.fuwanime.data.UpdateRepository
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.ui.components.ContinueWatchingCard
 import com.fuwanime.ui.components.ErrorState
@@ -95,9 +103,24 @@ fun HomeRoute(
     onSchedule: () -> Unit,
     onExplore: (genre: String?) -> Unit,
 ) {
-    val vm: HomeViewModel = fuwaViewModel { c, _ -> HomeViewModel(c.animeRepository, c.libraryRepository) }
+    val vm: HomeViewModel = fuwaViewModel { c, _ ->
+        HomeViewModel(c.animeRepository, c.libraryRepository, c.updateRepository, c.settingsStore)
+    }
     val state by vm.state.collectAsStateWithLifecycle()
-    HomeScreen(state, vm.today.label, vm::refresh, onAnimeClick, onContinue, onSearch, onSettings, onSchedule, onExplore)
+    val update by vm.update.collectAsStateWithLifecycle()
+    HomeScreen(
+        state = state,
+        todayLabel = vm.today.label,
+        onRefresh = vm::refresh,
+        update = update,
+        onDismissUpdate = vm::dismissUpdate,
+        onAnimeClick = onAnimeClick,
+        onContinue = onContinue,
+        onSearch = onSearch,
+        onSettings = onSettings,
+        onSchedule = onSchedule,
+        onExplore = onExplore,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -106,6 +129,8 @@ private fun HomeScreen(
     state: HomeUiState,
     todayLabel: String,
     onRefresh: () -> Unit,
+    update: UpdateRepository.UpdateInfo?,
+    onDismissUpdate: () -> Unit,
     onAnimeClick: (Anime) -> Unit,
     onContinue: (WatchHistoryEntity) -> Unit,
     onSearch: () -> Unit,
@@ -115,9 +140,15 @@ private fun HomeScreen(
 ) {
     val listState = rememberLazyListState()
     val feed = state.feed
+    var showUpdateSheet by remember { mutableStateOf(false) }
 
     PullToRefreshBox(isRefreshing = feed.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+            if (update != null) {
+                item(key = "updateBanner") {
+                    UpdateBanner(update, onClick = { showUpdateSheet = true }, onDismiss = onDismissUpdate)
+                }
+            }
             item(key = "hero") {
                 if (feed.loading && state.hero.isEmpty()) {
                     SkeletonBox(Modifier.fillMaxWidth().height(600.dp), shape = MaterialTheme.shapes.extraSmall)
@@ -189,6 +220,104 @@ private fun HomeScreen(
             onSearch = onSearch,
             onSettings = onSettings,
         )
+    }
+
+    if (showUpdateSheet && update != null) {
+        UpdateSheet(update, onDismiss = { showUpdateSheet = false })
+    }
+}
+
+@Composable
+private fun UpdateBanner(info: UpdateRepository.UpdateInfo, onClick: () -> Unit, onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.SystemUpdateAlt,
+                null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                "Update ${info.tag.removePrefix("v")} tersedia — ketuk untuk lihat perubahan",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f).padding(horizontal = 10.dp).clickable(onClick = onClick),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Rounded.Close,
+                    "Tutup banner update",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpdateSheet(info: UpdateRepository.UpdateInfo, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.SystemUpdateAlt, null, tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    info.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+            Text(
+                info.tag.removePrefix("v"),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                info.notes.ifBlank { "Tanpa catatan rilis." },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 20.dp)) {
+                Button(
+                    onClick = {
+                        info.apkUrl?.let { url ->
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)),
+                            )
+                        }
+                    },
+                    enabled = info.apkUrl != null,
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                ) {
+                    Icon(Icons.Rounded.Info, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Unduh APK")
+                }
+                OutlinedIconButton(
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(info.pageUrl)),
+                        )
+                    },
+                ) {
+                    Icon(Icons.Rounded.OpenInNew, "Buka di GitHub")
+                }
+            }
+        }
     }
 }
 

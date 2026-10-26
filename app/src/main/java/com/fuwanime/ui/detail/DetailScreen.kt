@@ -89,6 +89,8 @@ import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.ui.components.ErrorState
 import com.fuwanime.ui.components.NetImage
 import com.fuwanime.ui.components.Pill
+import com.fuwanime.ui.components.PosterRow
+import com.fuwanime.ui.components.SectionHeader
 import com.fuwanime.ui.components.SkeletonBox
 import com.fuwanime.ui.components.StatusPill
 import com.fuwanime.ui.components.fadeToBackground
@@ -99,6 +101,7 @@ import com.fuwanime.util.fuwaViewModel
 fun DetailRoute(
     onBack: () -> Unit,
     onPlay: (anime: Anime, episode: Episode) -> Unit,
+    onAnimeClick: (Anime) -> Unit,
     onGenre: (String) -> Unit,
 ) {
     val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h -> DetailViewModel(c.animeRepository, c.libraryRepository, c.downloadRepository, c.settingsStore, h) }
@@ -115,7 +118,18 @@ fun DetailRoute(
         }
     }
     Box(Modifier.fillMaxSize()) {
-        DetailScreen(state, vm.displayed(state), favorite, progress, downloads, vm, onBack, onPlay, onGenre)
+        DetailScreen(
+            state,
+            vm.displayed(state),
+            favorite,
+            progress,
+            downloads,
+            vm,
+            onBack,
+            onPlay,
+            onAnimeClick,
+            onGenre,
+        )
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
 }
@@ -131,6 +145,7 @@ private fun DetailScreen(
     vm: DetailViewModel,
     onBack: () -> Unit,
     onPlay: (Anime, Episode) -> Unit,
+    onAnimeClick: (Anime) -> Unit,
     onGenre: (String) -> Unit,
 ) {
     val anime = state.anime
@@ -207,6 +222,15 @@ private fun DetailScreen(
                 }
                 item(key = "synopsis") { Synopsis(anime.synopsis) }
                 item(key = "info") { InfoGrid(anime) }
+                if (state.similar.isNotEmpty()) {
+                    item(key = "similar") {
+                        Column(Modifier.padding(top = 24.dp)) {
+                            SectionHeader("Anime Serupa")
+                            Spacer(Modifier.height(12.dp))
+                            PosterRow(state.similar, loading = false, onClick = onAnimeClick)
+                        }
+                    }
+                }
             }
 
             item(key = "epHeader") {
@@ -389,6 +413,7 @@ private fun InfoGrid(anime: Anime) {
 @Composable
 private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
     var searching by rememberSaveable { mutableStateOf(false) }
+    var confirmDownloadAll by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.padding(top = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -400,6 +425,9 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            IconButton(onClick = { confirmDownloadAll = true }) {
+                Icon(Icons.Rounded.Download, "Unduh massal episode")
             }
             IconButton(onClick = {
                 searching = !searching
@@ -421,6 +449,24 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
             )
         }
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (confirmDownloadAll) {
+        AlertDialog(
+            onDismissRequest = { confirmDownloadAll = false },
+            icon = { Icon(Icons.Rounded.Download, null) },
+            title = { Text("Unduh massal episode?") },
+            text = {
+                Text(
+                    "Mengantre hingga 30 episode terbaru yang belum tersimpan, memakai kualitas " +
+                        "download dan opsi Wi-Fi dari Pengaturan.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDownloadAll = false; vm.downloadAllEpisodes() }) { Text("Unduh") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDownloadAll = false }) { Text("Batal") } },
+        )
     }
 }
 

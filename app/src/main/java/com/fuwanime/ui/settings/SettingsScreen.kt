@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SquareNotifications
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -151,6 +152,18 @@ fun SettingsRoute(onBack: () -> Unit) {
             item {
                 ChoiceRow(Icons.Rounded.TouchApp, "Ketuk dua kali untuk lompat", listOf(5, 10, 15, 30), s.doubleTapSeekSeconds, { "${it}s" }) {
                     vm.update { setDoubleTapSeekSeconds(it) }
+                }
+            }
+
+            item { Group("Notifikasi") }
+            item {
+                SwitchRow(
+                    Icons.Rounded.SquareNotifications,
+                    "Notifikasi episode baru",
+                    "Cek anime favorit yang masih tayang setiap 6 jam",
+                    s.notifyNewEpisodes,
+                ) {
+                    vm.update { setNotifyNewEpisodes(it) }
                 }
             }
 

@@ -6,6 +6,8 @@ import com.fuwanime.data.Anime
 import com.fuwanime.data.AnimeRepository
 import com.fuwanime.data.LibraryRepository
 import com.fuwanime.data.SortOrder
+import com.fuwanime.data.UpdateRepository
+import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.util.Day
 import com.fuwanime.util.friendlyMessage
@@ -15,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -43,9 +46,23 @@ data class HomeUiState(
 class HomeViewModel(
     private val anime: AnimeRepository,
     library: LibraryRepository,
+    private val updateRepository: UpdateRepository,
+    private val settingsStore: SettingsStore,
 ) : ViewModel() {
 
     private val feed = MutableStateFlow(HomeFeed())
+
+    /** Non-null when a newer GitHub release exists (checked at most once every 6 hours). */
+    private val _update = MutableStateFlow<UpdateRepository.UpdateInfo?>(null)
+    val update: StateFlow<UpdateRepository.UpdateInfo?> = _update.asStateFlow()
+
+    /** Hides the update banner until the next release. */
+    fun dismissUpdate() {
+        _update.value?.let { info ->
+            viewModelScope.launch { settingsStore.dismissUpdate(info.tag) }
+        }
+        _update.value = null
+    }
 
     val state: StateFlow<HomeUiState> = combine(feed, library.continueWatching(15)) { f, cw ->
         HomeUiState(f, cw)
@@ -55,6 +72,7 @@ class HomeViewModel(
 
     init {
         load(refreshing = false)
+        viewModelScope.launch { _update.value = updateRepository.check() }
     }
 
     fun refresh() = load(refreshing = true)

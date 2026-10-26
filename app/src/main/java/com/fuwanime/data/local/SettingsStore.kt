@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +26,8 @@ data class AppSettings(
     /** Downloads default lower than streaming to save storage. */
     val downloadQuality: Int = 480,
     val downloadWifiOnly: Boolean = false,
+    /** Periodic background check for new episodes of favorited, ongoing anime. */
+    val notifyNewEpisodes: Boolean = true,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -40,6 +44,9 @@ class SettingsStore(private val context: Context) {
         val doubleTapSeekSeconds = intPreferencesKey("double_tap_seek_seconds")
         val downloadQuality = intPreferencesKey("download_quality")
         val downloadWifiOnly = booleanPreferencesKey("download_wifi_only")
+        val notifyNewEpisodes = booleanPreferencesKey("notify_new_episodes")
+        val updateLastCheckMs = longPreferencesKey("update_last_check_ms")
+        val updateDismissedTag = stringPreferencesKey("update_dismissed_tag")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -56,6 +63,7 @@ class SettingsStore(private val context: Context) {
             doubleTapSeekSeconds = this[Keys.doubleTapSeekSeconds] ?: d.doubleTapSeekSeconds,
             downloadQuality = this[Keys.downloadQuality] ?: d.downloadQuality,
             downloadWifiOnly = this[Keys.downloadWifiOnly] ?: d.downloadWifiOnly,
+            notifyNewEpisodes = this[Keys.notifyNewEpisodes] ?: d.notifyNewEpisodes,
         )
     }
 
@@ -68,4 +76,28 @@ class SettingsStore(private val context: Context) {
     suspend fun setDoubleTapSeekSeconds(seconds: Int) = context.dataStore.edit { it[Keys.doubleTapSeekSeconds] = seconds }
     suspend fun setDownloadQuality(height: Int) = context.dataStore.edit { it[Keys.downloadQuality] = height }
     suspend fun setDownloadWifiOnly(enabled: Boolean) = context.dataStore.edit { it[Keys.downloadWifiOnly] = enabled }
+    suspend fun setNotifyNewEpisodes(enabled: Boolean) = context.dataStore.edit { it[Keys.notifyNewEpisodes] = enabled }
+
+    /** Latest episode number already seen/notified for a favorited anime (per-anime key). */
+    suspend fun notifyBaseline(animeId: String): Double? =
+        context.dataStore.data.map { it[doublePreferencesKey("notify_baseline_$animeId")] }.firstOrNull()
+
+    suspend fun setNotifyBaseline(animeId: String, episode: Double) {
+        context.dataStore.edit { it[doublePreferencesKey("notify_baseline_$animeId")] = episode }
+    }
+
+    /** Update check runs at most once every 6 hours (unless the installed tag changed). */
+    suspend fun shouldCheckUpdate(currentTag: String): Boolean {
+        val last = context.dataStore.data.map { it[Keys.updateLastCheckMs] ?: 0L }.firstOrNull() ?: 0L
+        return System.currentTimeMillis() - last > 6 * 60 * 60 * 1000L
+    }
+
+    suspend fun markUpdateChecked() {
+        context.dataStore.edit { it[Keys.updateLastCheckMs] = System.currentTimeMillis() }
+    }
+
+    suspend fun dismissedUpdateTag(): String? =
+        context.dataStore.data.map { it[Keys.updateDismissedTag] }.firstOrNull()
+
+    suspend fun dismissUpdate(tag: String) = context.dataStore.edit { it[Keys.updateDismissedTag] = tag }
 }
