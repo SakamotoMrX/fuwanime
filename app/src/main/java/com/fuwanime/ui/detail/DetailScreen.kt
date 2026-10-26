@@ -244,6 +244,14 @@ private fun DetailScreen(
             }
 
             item(key = "epHeader") {
+                state.debugInfo?.let {
+                    Text(
+                        it,
+                        color = Color.Red,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                }
                 EpisodeHeader(state, vm)
             }
 

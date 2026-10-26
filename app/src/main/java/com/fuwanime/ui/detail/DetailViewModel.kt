@@ -47,6 +47,8 @@ data class DetailUiState(
     val firstEpisode: Episode? = null,
     /** Popular anime sharing at least one genre, shown as "Anime Serupa". */
     val similar: List<Anime> = emptyList(),
+    /** Temporary on-screen diagnosis while hunting the empty "Anime Serupa". */
+    val debugInfo: String? = null,
 )
 
 class DetailViewModel(
@@ -112,6 +114,7 @@ class DetailViewModel(
             s.copy(similar = matched)
         }
         debugLog("DBG-end: items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} matched=${matched.size} err=$err")
+        _state.update { s -> s.copy(debugInfo = "DBG items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} matched=${matched.size} err=$err") }
     }
 
     fun loadEpisodes() {
