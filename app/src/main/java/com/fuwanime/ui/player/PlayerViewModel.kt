@@ -73,6 +73,8 @@ class PlayerViewModel(
                 id = checkNotNull(saved["episodeId"]),
                 number = saved.get<String>("number").orEmpty(),
                 title = "Episode ${saved.get<String>("number").orEmpty()}",
+                // Shown in the video area until the first frame, so the tapped thumbnail has somewhere to land.
+                thumbnail = saved.get<String>("thumb").orEmpty(),
             ),
         ),
     )

@@ -62,6 +62,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import com.fuwanime.ui.motion.staggerIn
+import com.fuwanime.ui.motion.rememberStaggerState
+import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.data.Anime
 import com.fuwanime.data.SortOrder
 import com.fuwanime.ui.components.ErrorState
@@ -79,7 +83,7 @@ val AllGenres = listOf(
 )
 
 @Composable
-fun ExploreRoute(focusSearch: Boolean, onAnimeClick: (Anime) -> Unit) {
+fun ExploreRoute(focusSearch: Boolean, onAnimeClick: OpenAnime) {
     val vm: ExploreViewModel = fuwaViewModel { c, h -> ExploreViewModel(c.animeRepository, c.libraryRepository, h) }
     val state by vm.state.collectAsStateWithLifecycle()
     val recent by vm.recentSearches.collectAsStateWithLifecycle()
@@ -92,7 +96,7 @@ private fun ExploreScreen(
     recent: List<String>,
     focusSearch: Boolean,
     vm: ExploreViewModel,
-    onAnimeClick: (Anime) -> Unit,
+    onAnimeClick: OpenAnime,
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -250,7 +254,8 @@ private fun FilterBar(filters: ExploreFilters, vm: ExploreViewModel) {
 }
 
 @Composable
-private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClick: (Anime) -> Unit) {
+private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClick: OpenAnime) {
+    val stagger = rememberStaggerState()
     val gridState = rememberLazyGridState()
     val nearEnd by remember {
         derivedStateOf {
@@ -288,8 +293,14 @@ private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClic
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(state.results, key = { it.id }) { anime ->
-                PosterCard(anime, onClick = { onAnimeClick(anime) }, caption = "${compactNumber(anime.views)} ditonton")
+            itemsIndexed(state.results, key = { _, a -> a.id }) { index, anime ->
+                PosterCard(
+                    anime,
+                    onClick = { onAnimeClick(anime, "explore") },
+                    modifier = Modifier.animateItem().staggerIn(stagger, anime.id, index),
+                    caption = "${compactNumber(anime.views)} ditonton",
+                    sharedOrigin = "explore",
+                )
             }
             if (state.loadingMore || (!state.endReached && state.error == null)) {
                 item(span = { GridItemSpan(maxLineSpan) }) {

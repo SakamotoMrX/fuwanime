@@ -38,6 +38,9 @@ object Motion {
     val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 }
 
+/** Opens an anime's detail page; [from] names the row it was tapped in, for the shared poster key. */
+typealias OpenAnime = (anime: com.fuwanime.data.Anime, from: String) -> Unit
+
 /** Shared-element keys carry the row a title was opened from, so the same anime in two rows never clashes. */
 fun sharedPosterKey(animeId: String, origin: String) = "poster-$animeId-$origin"
 fun sharedEpisodeKey(episodeId: String, origin: String) = "episode-$episodeId-$origin"
@@ -95,15 +98,15 @@ fun Modifier.sharedKey(key: String?): Modifier = composed {
     }
 }
 
-/** Destination content that rises into place after a shared element starts flying. */
-fun Modifier.navEnter(delayMs: Int = 120): Modifier = composed {
+/** Destination content that fades (and with [rise], rises) into place after a shared element starts flying. */
+fun Modifier.navEnter(delayMs: Int = 120, rise: Boolean = true): Modifier = composed {
     val nav = LocalNavScope.current
     if (nav == null || LocalReduceMotion.current) return@composed Modifier
-    val rise = with(LocalDensity.current) { 24.dp.roundToPx() }
+    val risePx = if (rise) with(LocalDensity.current) { 24.dp.roundToPx() } else 0
     with(nav) {
         Modifier.animateEnterExit(
             enter = fadeIn(tween(Motion.Medium, delayMs, Motion.EmphasizedDecelerate)) +
-                slideInVertically(tween(Motion.Medium, delayMs, Motion.EmphasizedDecelerate)) { rise },
+                slideInVertically(tween(Motion.Medium, delayMs, Motion.EmphasizedDecelerate)) { risePx },
             exit = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate)),
         )
     }
