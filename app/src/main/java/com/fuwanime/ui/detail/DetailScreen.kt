@@ -82,6 +82,7 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarHost
 import com.fuwanime.data.Episode
@@ -114,7 +115,7 @@ fun DetailRoute(
     LaunchedEffect(message) {
         message?.let {
             vm.messageShown()
-            snackbar.showSnackbar(it)
+            snackbar.showSnackbar(it, duration = SnackbarDuration.Long)
         }
     }
     Box(Modifier.fillMaxSize()) {
