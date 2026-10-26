@@ -25,8 +25,7 @@ data class EpisodeListData(
 @JsonClass(generateAdapter = true)
 data class DetailData(
     @Json(name = "movie") val movie: AnimeDto? = null,
-    /** A single episode here (unlike the episode list endpoint). */
-    @Json(name = "episode") val episode: EpisodeDto? = null,
+    // `episode` is deliberately not mapped: unused, and its shape varies (an object here, a list elsewhere).
     @Json(name = "season") val season: List<AnimeDto>? = null,
 )
 

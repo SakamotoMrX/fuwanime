@@ -255,12 +255,17 @@ fun PlayerRoute(onBack: () -> Unit) {
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var sleep by remember { mutableStateOf(SleepOption.OFF) }
     var sleepAtMs by remember { mutableStateOf<Long?>(null) }
+    /** Set when a timed sleep fired; blocks autoplay until the user presses play again. */
+    var sleepExpired by remember { mutableStateOf(false) }
+    /** Episode whose opening was auto-skipped or re-marked; survives rotation and PiP unlike VideoSurface state. */
+    var autoSkipHandledFor by remember { mutableStateOf<String?>(null) }
 
     // --- Player wiring ---------------------------------------------------------------------
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playback.isPlaying = isPlaying
+                if (isPlaying) sleepExpired = false
                 view.keepScreenOn = isPlaying
             }
 
@@ -326,7 +331,7 @@ fun PlayerRoute(onBack: () -> Unit) {
         }
         player.setMediaItem(MediaItem.fromUri(source.url), state.startPositionMs.coerceAtLeast(0))
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = !sleepExpired
     }
 
     LaunchedEffect(player) {
@@ -350,6 +355,7 @@ fun PlayerRoute(onBack: () -> Unit) {
     LaunchedEffect(sleepAtMs) {
         val at = sleepAtMs ?: return@LaunchedEffect
         delay((at - System.currentTimeMillis()).coerceAtLeast(0))
+        sleepExpired = true
         player.pause()
         sleep = SleepOption.OFF
         sleepAtMs = null
@@ -411,6 +417,9 @@ fun PlayerRoute(onBack: () -> Unit) {
             speed = speed,
             opMark = opMark,
             sleep = sleep,
+            sleepExpired = sleepExpired,
+            autoSkipHandledFor = autoSkipHandledFor,
+            onAutoSkipped = { autoSkipHandledFor = it },
             fullscreen = fullscreen,
             inPip = inPip,
             onBack = { if (fullscreen) setFullscreen(false) else onBack() },
@@ -478,8 +487,14 @@ fun PlayerRoute(onBack: () -> Unit) {
                 player.setPlaybackSpeed(it)
             },
             onResize = { resizeMode = it },
-            onMarkOpStart = { vm.markOpStart(player.effectivePosition(playback)) },
-            onMarkOpEnd = { vm.markOpEnd(player.effectivePosition(playback)) },
+            onMarkOpStart = {
+                autoSkipHandledFor = state.episode.id
+                vm.markOpStart(player.effectivePosition(playback))
+            },
+            onMarkOpEnd = {
+                autoSkipHandledFor = state.episode.id
+                vm.markOpEnd(player.effectivePosition(playback))
+            },
             onClearOpMark = vm::clearOpMark,
             onSleep = { option ->
                 sleep = option
@@ -500,6 +515,9 @@ private fun VideoSurface(
     speed: Float,
     opMark: OpMark?,
     sleep: SleepOption,
+    sleepExpired: Boolean,
+    autoSkipHandledFor: String?,
+    onAutoSkipped: (String) -> Unit,
     fullscreen: Boolean,
     inPip: Boolean,
     pipSupported: Boolean,
@@ -568,11 +586,15 @@ private fun VideoSurface(
                                 boosting = true
                                 player.setPlaybackSpeed(boostedSpeed(baseSpeed))
                             }
-                            tryAwaitRelease()
-                            boost.cancel()
-                            if (boosting) {
-                                boosting = false
-                                player.setPlaybackSpeed(baseSpeed)
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                // Also runs when the gesture is cancelled (rotation, PiP), so 2x never sticks.
+                                boost.cancel()
+                                if (boosting) {
+                                    boosting = false
+                                    player.setPlaybackSpeed(baseSpeed)
+                                }
                             }
                         },
                         // Handled in onPress; declaring it stops the release from also counting as a tap.
@@ -685,14 +707,13 @@ private fun VideoSurface(
         val skip = if (!state.loading && playback.error == null && !playback.ended) {
             skipActionAt(playback.position, playback.duration, opMark)
         } else null
-        var autoSkippedEpisode by remember { mutableStateOf<String?>(null) }
         LaunchedEffect((skip as? SkipAction.SkipOp)?.targetMs, state.episode.id) {
-            if (settings.autoSkipOp && skip is SkipAction.SkipOp && autoSkippedEpisode != state.episode.id) {
-                autoSkippedEpisode = state.episode.id
+            if (skip != null && shouldAutoSkip(settings.autoSkipOp, skip, state.episode.id, autoSkipHandledFor)) {
+                onAutoSkipped(state.episode.id)
                 player.seekSafely(skip.targetMs, playback)
             }
         }
-        if (skip != null && !locked) {
+        if (skip != null && skipButtonVisible(controlsVisible, fullscreen, locked)) {
             OutlinedButton(
                 onClick = {
                     player.seekSafely(skip.targetMs, playback)
@@ -730,7 +751,7 @@ private fun VideoSurface(
         if (playback.ended && !state.loading) {
             EndOverlay(
                 next = state.next,
-                autoPlay = autoPlayAllowed(settings.autoPlayNext, sleep),
+                autoPlay = autoPlayAllowed(settings.autoPlayNext, sleep, sleepExpired),
                 onNext = onNext,
                 onReplay = {
                     player.seekTo(0)
@@ -968,7 +989,11 @@ private fun LevelIndicator(icon: ImageVector, level: Float, modifier: Modifier) 
 private fun EndOverlay(next: Episode?, autoPlay: Boolean, onNext: () -> Unit, onReplay: () -> Unit) {
     var remaining by remember(next?.id) { mutableIntStateOf(if (autoPlay && next != null) 6 else -1) }
     LaunchedEffect(next?.id, autoPlay) {
-        if (!autoPlay || next == null) return@LaunchedEffect
+        if (!autoPlay || next == null) {
+            // Autoplay can be switched off mid-countdown (sleep timer); drop the frozen count.
+            remaining = -1
+            return@LaunchedEffect
+        }
         while (remaining > 0) {
             delay(1_000)
             remaining--

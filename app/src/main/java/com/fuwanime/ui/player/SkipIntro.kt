@@ -27,10 +27,16 @@ fun skipActionAt(positionMs: Long, durationMs: Long, mark: OpMark?): SkipAction?
     return if (durationMs <= 0 || target < durationMs) SkipAction.JumpAhead(target) else null
 }
 
-fun skipButtonVisible(controlsVisible: Boolean, fullscreen: Boolean, locked: Boolean): Boolean = true
+/** In the small portrait player the centred transport row reaches the bottom-right corner, so the button waits for it to hide. */
+fun skipButtonVisible(controlsVisible: Boolean, fullscreen: Boolean, locked: Boolean): Boolean =
+    !locked && (fullscreen || !controlsVisible)
 
+/**
+ * Auto-skip runs once per episode. [handledEpisodeId] is the episode already skipped, or the one in which the user
+ * edited the mark (so marking the start never jumps to a guessed end behind the sheet).
+ */
 fun shouldAutoSkip(enabled: Boolean, action: SkipAction?, episodeId: String, handledEpisodeId: String?): Boolean =
-    enabled && action is SkipAction.SkipOp
+    enabled && action is SkipAction.SkipOp && handledEpisodeId != episodeId
 
 /** Sets one edge of the mark at [positionMs], keeping the other edge when it still makes sense. */
 fun markOp(current: OpMark?, positionMs: Long, isStart: Boolean): OpMark = if (isStart) {
