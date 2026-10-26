@@ -239,7 +239,7 @@ fun Wordmark(onDark: Boolean = false) {
             color = if (onDark) Color.White else MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            "Nime",
+            "Stream",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
             color = MaterialTheme.colorScheme.primary,
         )

@@ -1,4 +1,4 @@
-# FuwaNime
+# FuwaStream
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 
@@ -57,5 +57,5 @@ Konten berasal dari API pihak ketiga. Aplikasi ini tidak meng-host video apa pun
 ## Lisensi
 
 Kode proyek ini dirilis di bawah [GPL-3.0](./LICENSE). Setiap fork atau modifikasi wajib
-tetap open source dengan lisensi yang sama. Nama, logo, dan aset brand FuwaNime tidak
+tetap open source dengan lisensi yang sama. Nama, logo, dan aset brand FuwaStream tidak
 termasuk dalam lisensi kode.

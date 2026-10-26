@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "FuwaNime"
+rootProject.name = "FuwaStream"
 
 include(":app")

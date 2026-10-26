@@ -184,7 +184,7 @@ fun SettingsRoute(onBack: () -> Unit) {
 
             item { Group("Tentang") }
             item {
-                ActionRow(Icons.Rounded.Info, "FuwaNime ${BuildConfig.VERSION_NAME}", "Fork komunitas dengan desain ulang Material 3", onClick = null)
+                ActionRow(Icons.Rounded.Info, "FuwaStream ${BuildConfig.VERSION_NAME}", "Fork komunitas dengan desain ulang Material 3", onClick = null)
             }
             item {
                 ActionRow(Icons.Rounded.AutoAwesome, "Konten disediakan pihak ketiga", "Aplikasi ini tidak meng-host video apa pun", onClick = null)

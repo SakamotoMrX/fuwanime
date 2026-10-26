@@ -60,11 +60,11 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/*.apk "dist/FuwaNime-${VERSION_NAME}.apk"
+          cp app/build/outputs/apk/release/*.apk "dist/FuwaStream-${VERSION_NAME}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FuwaNime-${{ env.VERSION_NAME }}
+          name: FuwaStream-${{ env.VERSION_NAME }}
           path: dist/*.apk
 
       - name: Publish release
@@ -73,7 +73,7 @@ jobs:
         with:
           # Tag pushes keep their own tag; pushes to main get an automatic build-N tag.
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-          name: FuwaNime ${{ env.VERSION_NAME }}
+          name: FuwaStream ${{ env.VERSION_NAME }}
           target_commitish: ${{ github.sha }}
           files: dist/*.apk
           generate_release_notes: true
