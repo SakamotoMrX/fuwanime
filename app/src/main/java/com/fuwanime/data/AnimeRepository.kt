@@ -49,13 +49,17 @@ class AnimeRepository(private val api: AnimeApiService) {
         remember(api.schedule(day.lowercase()).data?.movie.orEmpty().map { it.toAnime() })
     }
 
-    suspend fun detailWithSeasons(id: String): Result<AnimeDetail> = TODO()
-
-    suspend fun detail(id: String): Result<Anime> = io {
+    /** Detail plus the franchise list ("S1", "Movie", …) that only the detail response carries. */
+    suspend fun detailWithSeasons(id: String): Result<AnimeDetail> = io {
         val data = api.detail(id).data
         val anime = data?.movie?.toAnime() ?: error("Anime tidak ditemukan")
-        animeCache.merge(id, anime, ::mergeAnime)!!
+        val seasons = data.season.orEmpty()
+            .filter { it.id.isNotBlank() }
+            .map { SeasonEntry(it.toAnime(), it.season?.trim().orEmpty()) }
+        AnimeDetail(animeCache.merge(id, anime, ::mergeAnime)!!, seasons)
     }
+
+    suspend fun detail(id: String): Result<Anime> = detailWithSeasons(id).map { it.anime }
 
     suspend fun episodePage(animeId: String, page: Int, forceRefresh: Boolean = false): Result<List<Episode>> = io {
         if (!forceRefresh) {

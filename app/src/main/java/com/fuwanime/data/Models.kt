@@ -85,7 +85,8 @@ fun AnimeDto.toAnime() = Anime(
     favorites = favorites?.toLongOrNull() ?: 0,
     studio = studio.orEmpty(),
     airedStart = airedStart.orEmpty(),
-    genres = genre.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() },
+    // Franchise entries send "-" for no genre.
+    genres = genre.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() && it != "-" },
     nextAirTime = keyTime.orEmpty(),
 )
 
