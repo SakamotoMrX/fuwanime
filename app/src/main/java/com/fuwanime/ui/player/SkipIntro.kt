@@ -27,6 +27,11 @@ fun skipActionAt(positionMs: Long, durationMs: Long, mark: OpMark?): SkipAction?
     return if (durationMs <= 0 || target < durationMs) SkipAction.JumpAhead(target) else null
 }
 
+fun skipButtonVisible(controlsVisible: Boolean, fullscreen: Boolean, locked: Boolean): Boolean = true
+
+fun shouldAutoSkip(enabled: Boolean, action: SkipAction?, episodeId: String, handledEpisodeId: String?): Boolean =
+    enabled && action is SkipAction.SkipOp
+
 /** Sets one edge of the mark at [positionMs], keeping the other edge when it still makes sense. */
 fun markOp(current: OpMark?, positionMs: Long, isStart: Boolean): OpMark = if (isStart) {
     OpMark(positionMs, current?.endMs?.takeIf { it > positionMs } ?: (positionMs + GUESSED_OP_MS))

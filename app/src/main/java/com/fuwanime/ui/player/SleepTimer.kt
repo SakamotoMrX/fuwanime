@@ -13,7 +13,7 @@ enum class SleepOption(val label: String, val minutes: Int?) {
 fun sleepDeadline(option: SleepOption, nowMs: Long): Long? = option.minutes?.let { nowMs + it * 60_000L }
 
 /** "Akhir episode" means stop there, so the next-episode countdown must not start. */
-fun autoPlayAllowed(autoPlayNext: Boolean, sleep: SleepOption): Boolean =
+fun autoPlayAllowed(autoPlayNext: Boolean, sleep: SleepOption, sleepExpired: Boolean = false): Boolean =
     autoPlayNext && sleep != SleepOption.END_OF_EPISODE
 
 /** Speed while the video is held down. */
