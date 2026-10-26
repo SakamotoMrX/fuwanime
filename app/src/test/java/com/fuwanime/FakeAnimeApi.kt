@@ -16,6 +16,11 @@ open class FakeAnimeApi : AnimeApiService {
         return ApiResponse(data = MovieListData(emptyList()))
     }
 
+    override suspend fun exploreByType(type: String, page: Int, sort: String): ApiResponse<MovieListData> {
+        calls += "exploreByType(type=$type, page=$page, sort=$sort)"
+        return ApiResponse(data = MovieListData(emptyList()))
+    }
+
     override suspend fun schedule(day: String): ApiResponse<MovieListData> = ApiResponse(data = MovieListData(emptyList()))
 
     override suspend fun detail(animeId: String, idUser: String, keyClient: String): ApiResponse<DetailData> {

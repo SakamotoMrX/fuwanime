@@ -20,6 +20,14 @@ interface AnimeApiService {
         @Query("keyword") keyword: String = "",
     ): ApiResponse<MovieListData>
 
+    /** Server-side type filter (SERIES, MOVIE, LIVE ACTION, …). Ignores any keyword. */
+    @GET("3/2/explore/movie_type")
+    suspend fun exploreByType(
+        @Query("type") type: String,
+        @Query("page") page: Int = 0,
+        @Query("sort") sort: String = "views",
+    ): ApiResponse<MovieListData>
+
     @GET("3/2/schedule/data")
     suspend fun schedule(@Query("day") day: String): ApiResponse<MovieListData>
 

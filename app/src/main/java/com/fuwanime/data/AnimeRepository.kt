@@ -39,7 +39,12 @@ class AnimeRepository(private val api: AnimeApiService) {
         poster = new.poster.ifBlank { old.poster },
     )
 
-    suspend fun explore(page: Int, sort: SortOrder = SortOrder.POPULAR, keyword: String = ""): Result<List<Anime>> =
+    suspend fun explore(
+        page: Int,
+        sort: SortOrder = SortOrder.POPULAR,
+        keyword: String = "",
+        type: String? = null,
+    ): Result<List<Anime>> =
         io {
             val items = api.explore(page = page, sort = sort.apiValue, keyword = keyword.trim()).data?.movie.orEmpty()
             remember(items.map { it.toAnime() }.distinctBy { it.id })

@@ -21,10 +21,23 @@ import kotlinx.coroutines.launch
 
 enum class StatusFilter(val label: String) { ALL("Semua"), ONGOING("Tayang"), FINISHED("Tamat") }
 
+enum class TypeFilter(val label: String, val apiType: String?) {
+    ALL("Semua", null),
+    SERIES("Series", "SERIES"),
+    MOVIE("Film", "MOVIE"),
+    LIVE_ACTION("Live Action", "LIVE ACTION"),
+    ONA("ONA", "ONA"),
+    OVA("OVA", "OVA"),
+    SPECIAL("Special", "SPECIAL");
+
+    fun matches(type: String): Boolean = false
+}
+
 data class ExploreFilters(
     val query: String = "",
     val genre: String? = null,
     val status: StatusFilter = StatusFilter.ALL,
+    val type: TypeFilter = TypeFilter.ALL,
     val sort: SortOrder = SortOrder.POPULAR,
 ) {
     val activeCount: Int get() = listOfNotNull(genre, status.takeIf { it != StatusFilter.ALL }).size
