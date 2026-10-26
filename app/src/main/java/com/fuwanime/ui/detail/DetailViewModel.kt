@@ -92,7 +92,12 @@ class DetailViewModel(
                     }
                     loadSimilar(d.anime)
                 }
-                .onFailure { e -> _state.update { it.copy(loadingInfo = false, infoError = e.friendlyMessage()) } }
+                .onFailure { e ->
+                    _state.update { it.copy(loadingInfo = false, infoError = e.friendlyMessage()) }
+                    // The detail endpoint can be unreachable (upstream/Cloudflare) — the cached
+                    // list data still carries genres, so "Anime Serupa" keeps working.
+                    repo.cachedAnime(animeId)?.let { loadSimilar(it) }
+                }
         }
     }
 
