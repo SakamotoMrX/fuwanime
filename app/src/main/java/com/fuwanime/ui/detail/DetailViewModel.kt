@@ -11,6 +11,7 @@ import com.fuwanime.data.DownloadState
 import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.Episode
 import com.fuwanime.data.LibraryRepository
+import com.fuwanime.data.SeasonEntry
 import com.fuwanime.data.SortOrder
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.data.remote.AnimeApiService.Companion.EPISODE_PAGE_SIZE
@@ -26,6 +27,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
+
+/** Franchise entries worth linking from a detail page. */
+fun relatedSeasons(currentId: String, seasons: List<SeasonEntry>): List<SeasonEntry> = seasons
 
 /** A page of episodes as shown in the range picker, e.g. "1–30". */
 data class EpisodeRange(val page: Int, val label: String)
