@@ -46,7 +46,13 @@ class AnimeRepository(private val api: AnimeApiService) {
         type: String? = null,
     ): Result<List<Anime>> =
         io {
-            val items = api.explore(page = page, sort = sort.apiValue, keyword = keyword.trim()).data?.movie.orEmpty()
+            // The type endpoint ignores keywords, so searches use the keyword endpoint and callers filter by type.
+            val response = if (type != null && keyword.isBlank()) {
+                api.exploreByType(type = type, page = page, sort = sort.apiValue)
+            } else {
+                api.explore(page = page, sort = sort.apiValue, keyword = keyword.trim())
+            }
+            val items = response.data?.movie.orEmpty()
             remember(items.map { it.toAnime() }.distinctBy { it.id })
         }
 

@@ -184,6 +184,7 @@ private fun RecentSearches(items: List<String>, onPick: (String) -> Unit, onRemo
 private fun FilterBar(filters: ExploreFilters, vm: ExploreViewModel) {
     var sortOpen by remember { mutableStateOf(false) }
     var statusOpen by remember { mutableStateOf(false) }
+    var typeOpen by remember { mutableStateOf(false) }
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -217,6 +218,21 @@ private fun FilterBar(filters: ExploreFilters, vm: ExploreViewModel) {
                 DropdownMenu(statusOpen, onDismissRequest = { statusOpen = false }) {
                     StatusFilter.entries.forEach { s ->
                         DropdownMenuItem(text = { Text(s.label) }, onClick = { vm.setStatus(s); statusOpen = false })
+                    }
+                }
+            }
+        }
+        item {
+            Box {
+                FilterChip(
+                    selected = filters.type != TypeFilter.ALL,
+                    onClick = { typeOpen = true },
+                    label = { Text(if (filters.type == TypeFilter.ALL) "Tipe" else filters.type.label) },
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null) },
+                )
+                DropdownMenu(typeOpen, onDismissRequest = { typeOpen = false }) {
+                    TypeFilter.entries.forEach { t ->
+                        DropdownMenuItem(text = { Text(t.label) }, onClick = { vm.setType(t); typeOpen = false })
                     }
                 }
             }

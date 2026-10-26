@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 
 enum class StatusFilter(val label: String) { ALL("Semua"), ONGOING("Tayang"), FINISHED("Tamat") }
 
+/** [apiType] is the API's `type` value; null means no type filter. */
 enum class TypeFilter(val label: String, val apiType: String?) {
     ALL("Semua", null),
     SERIES("Series", "SERIES"),
@@ -30,7 +31,8 @@ enum class TypeFilter(val label: String, val apiType: String?) {
     OVA("OVA", "OVA"),
     SPECIAL("Special", "SPECIAL");
 
-    fun matches(type: String): Boolean = false
+    fun matches(type: String): Boolean =
+        apiType == null || type.trim().replace('-', ' ').equals(apiType, ignoreCase = true)
 }
 
 data class ExploreFilters(
@@ -40,7 +42,11 @@ data class ExploreFilters(
     val type: TypeFilter = TypeFilter.ALL,
     val sort: SortOrder = SortOrder.POPULAR,
 ) {
-    val activeCount: Int get() = listOfNotNull(genre, status.takeIf { it != StatusFilter.ALL }).size
+    val activeCount: Int get() = listOfNotNull(
+        genre,
+        status.takeIf { it != StatusFilter.ALL },
+        type.takeIf { it != TypeFilter.ALL },
+    ).size
 }
 
 data class ExploreUiState(
@@ -97,16 +103,18 @@ class ExploreViewModel(
 
     fun setGenre(genre: String?) = updateFilters { it.copy(genre = genre) }
     fun setStatus(status: StatusFilter) = updateFilters { it.copy(status = status) }
+    fun setType(type: TypeFilter) = updateFilters { it.copy(type = type) }
     fun setSort(sort: SortOrder) = updateFilters { it.copy(sort = sort) }
-    fun clearFilters() = updateFilters { it.copy(genre = null, status = StatusFilter.ALL) }
+    fun clearFilters() = updateFilters { it.copy(genre = null, status = StatusFilter.ALL, type = TypeFilter.ALL) }
 
     private fun updateFilters(change: (ExploreFilters) -> ExploreFilters) {
         val before = _state.value.filters
         val after = change(before)
         if (after == before) return
         _state.update { it.copy(filters = after) }
-        // Sort and query hit the server; genre/status only re-filter what we already have.
-        if (after.sort != before.sort || after.query != before.query) reload() else refilter(fillPage = true)
+        // Sort, query and type hit the server; genre/status only re-filter what we already have.
+        if (after.sort != before.sort || after.query != before.query || after.type != before.type) reload()
+        else refilter(fillPage = true)
     }
 
     fun reload() {
@@ -127,7 +135,7 @@ class ExploreViewModel(
             // Genre/status filtering is client-side, so keep fetching until enough new matches show up.
             repeat(MAX_PAGES_PER_BATCH) {
                 val f = _state.value.filters
-                val page = repo.explore(nextPage, f.sort, f.query).getOrElse { e ->
+                val page = repo.explore(nextPage, f.sort, f.query, f.type.apiType).getOrElse { e ->
                     _state.update { it.copy(loading = false, loadingMore = false, error = e.friendlyMessage()) }
                     return@launch
                 }
@@ -154,7 +162,9 @@ class ExploreViewModel(
                     StatusFilter.ALL -> true
                     StatusFilter.ONGOING -> a.isOngoing
                     StatusFilter.FINISHED -> !a.isOngoing && !a.isUpcoming
-                }
+                } &&
+                // Server-filtered pages already match; keyword searches are type-filtered here.
+                f.type.matches(a.type)
         }
         _state.update { it.copy(results = filtered) }
         if (fillPage) {
