@@ -470,6 +470,9 @@ private fun VideoSurface(
     var hideJob by remember { mutableStateOf<Job?>(null) }
     var seekFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // (forward, seconds)
     var gestureLevel by remember { mutableStateOf<Pair<ImageVector, Float>?>(null) }
+    var holdSpeedJob by remember { mutableStateOf<Job?>(null) }
+    var holdSpeedActive by remember { mutableStateOf(false) }
+    var holdSpeedPrevious by remember { mutableStateOf(1f) }
 
     fun scheduleHide() {
         hideJob?.cancel()
@@ -501,17 +504,40 @@ private fun VideoSurface(
 
         if (inPip) return@Box
 
-        // Gesture layer: tap toggles controls, double-tap seeks, vertical drags adjust brightness/volume.
+        // Gesture layer: tap toggles controls, double-tap seeks, hold = 2x speed,
+        // vertical drags adjust brightness/volume.
         Box(
             Modifier
                 .fillMaxSize()
                 .pointerInput(seekStepMs) {
                     detectTapGestures(
+                        onPress = {
+                            holdSpeedJob?.cancel()
+                            holdSpeedJob = scope.launch {
+                                delay(350)
+                                if (player.isPlaying) {
+                                    holdSpeedPrevious = player.playbackParameters.speed
+                                    holdSpeedActive = true
+                                    player.setPlaybackSpeed(2f)
+                                }
+                            }
+                            tryAwaitRelease()
+                            holdSpeedJob?.cancel()
+                            if (holdSpeedActive) {
+                                holdSpeedActive = false
+                                player.setPlaybackSpeed(holdSpeedPrevious)
+                            }
+                        },
                         onTap = {
                             controlsVisible = !controlsVisible
                             if (controlsVisible) scheduleHide()
                         },
                         onDoubleTap = { offset ->
+                            holdSpeedJob?.cancel()
+                            if (holdSpeedActive) {
+                                holdSpeedActive = false
+                                player.setPlaybackSpeed(holdSpeedPrevious)
+                            }
                             val forward = offset.x > size.width / 2
                             player.seekSafely(player.effectivePosition(playback) + if (forward) seekStepMs else -seekStepMs, playback)
                             val prev = seekFeedback
@@ -558,6 +584,19 @@ private fun VideoSurface(
 
         seekFeedback?.let { (forward, secs) ->
             SeekBubble(forward, secs, Modifier.align(if (forward) Alignment.CenterEnd else Alignment.CenterStart))
+        }
+        if (holdSpeedActive) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.FastForward, null, tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text("2× kecepatan", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
         gestureLevel?.let { (icon, level) -> LevelIndicator(icon, level, Modifier.align(Alignment.Center)) }
 

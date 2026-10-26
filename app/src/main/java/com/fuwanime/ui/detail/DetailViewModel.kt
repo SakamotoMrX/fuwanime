@@ -1,5 +1,6 @@
 package com.fuwanime.ui.detail
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -57,6 +58,7 @@ class DetailViewModel(
 ) : ViewModel() {
 
     val animeId: String = checkNotNull(saved["animeId"])
+    private val TAG = "FuwaDetail"
 
     private val _state = MutableStateFlow(DetailUiState(anime = repo.cachedAnime(animeId)))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -90,16 +92,23 @@ class DetailViewModel(
     /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
     private suspend fun loadSimilar(anime: Anime) {
         val genres = anime.genres.take(2).map { it.lowercase() }
+        Log.d(TAG, "similar start: anime=${anime.id} genres=$genres")
         if (genres.isEmpty()) return
-        val items = repo.explore(0, SortOrder.POPULAR).getOrNull().orEmpty()
+        val result = repo.explore(0, SortOrder.POPULAR)
+        val items = result.getOrNull().orEmpty()
+        Log.d(
+            TAG,
+            "similar explore: ok=${result.isSuccess} items=${items.size} " +
+                "withGenres=${items.count { it.genres.isNotEmpty() }}",
+        )
         _state.update { s ->
             if (s.anime?.id != anime.id) return@update s
-            s.copy(
-                similar = items.filter { candidate ->
-                    candidate.id != anime.id &&
-                        candidate.genres.any { genres.contains(it.lowercase()) }
-                }.take(12),
-            )
+            val matched = items.filter { candidate ->
+                candidate.id != anime.id &&
+                    candidate.genres.any { genres.contains(it.lowercase()) }
+            }.take(12)
+            Log.d(TAG, "similar matched=${matched.size} of ${items.size}")
+            s.copy(similar = matched)
         }
     }
 
