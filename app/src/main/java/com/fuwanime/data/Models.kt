@@ -58,6 +58,13 @@ data class StreamSource(
 fun List<StreamSource>.closestTo(preferredHeight: Int): StreamSource? =
     minByOrNull { s -> if (s.height == 0) Int.MAX_VALUE else kotlin.math.abs(s.height - preferredHeight) }
 
+/** One entry of a title's franchise list ("S1", "Movie", …) from the detail response. */
+@Immutable
+data class SeasonEntry(val anime: Anime, val label: String)
+
+@Immutable
+data class AnimeDetail(val anime: Anime, val seasons: List<SeasonEntry>)
+
 @Immutable
 data class EpisodeStream(
     val episode: Episode?,

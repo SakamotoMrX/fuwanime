@@ -49,6 +49,8 @@ class AnimeRepository(private val api: AnimeApiService) {
         remember(api.schedule(day.lowercase()).data?.movie.orEmpty().map { it.toAnime() })
     }
 
+    suspend fun detailWithSeasons(id: String): Result<AnimeDetail> = TODO()
+
     suspend fun detail(id: String): Result<Anime> = io {
         val data = api.detail(id).data
         val anime = data?.movie?.toAnime() ?: error("Anime tidak ditemukan")

@@ -26,6 +26,7 @@ data class EpisodeListData(
 data class DetailData(
     @Json(name = "movie") val movie: AnimeDto? = null,
     @Json(name = "episode") val episode: List<EpisodeDto>? = null,
+    @Json(name = "season") val season: List<AnimeDto>? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -53,6 +54,8 @@ data class AnimeDto(
     @Json(name = "aired_start") val airedStart: String? = null,
     @Json(name = "genre") val genre: String? = null,
     @Json(name = "key_time") val keyTime: String? = null,
+    /** Franchise label in detail's `season` array, e.g. "S1", "Movie". */
+    @Json(name = "season") val season: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
