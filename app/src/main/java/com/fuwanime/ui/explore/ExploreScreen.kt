@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.NorthWest
@@ -184,6 +185,7 @@ private fun RecentSearches(items: List<String>, onPick: (String) -> Unit, onRemo
 private fun FilterBar(filters: ExploreFilters, vm: ExploreViewModel) {
     var sortOpen by remember { mutableStateOf(false) }
     var statusOpen by remember { mutableStateOf(false) }
+    var typeOpen by remember { mutableStateOf(false) }
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -217,6 +219,31 @@ private fun FilterBar(filters: ExploreFilters, vm: ExploreViewModel) {
                 DropdownMenu(statusOpen, onDismissRequest = { statusOpen = false }) {
                     StatusFilter.entries.forEach { s ->
                         DropdownMenuItem(text = { Text(s.label) }, onClick = { vm.setStatus(s); statusOpen = false })
+                    }
+                }
+            }
+        }
+        item {
+            Box {
+                FilterChip(
+                    selected = filters.type != null,
+                    onClick = { typeOpen = true },
+                    label = { Text(filters.type ?: "Tipe") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Category, null, Modifier.size(FilterChipDefaults.IconSize))
+                    },
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null) },
+                )
+                DropdownMenu(typeOpen, onDismissRequest = { typeOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Semua tipe") },
+                        onClick = { vm.setType(null); typeOpen = false },
+                    )
+                    AnimeTypes.forEach { t ->
+                        DropdownMenuItem(
+                            text = { Text(t) },
+                            onClick = { vm.setType(t); typeOpen = false },
+                        )
                     }
                 }
             }

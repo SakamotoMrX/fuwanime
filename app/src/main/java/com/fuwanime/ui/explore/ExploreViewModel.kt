@@ -21,13 +21,17 @@ import kotlinx.coroutines.launch
 
 enum class StatusFilter(val label: String) { ALL("Semua"), ONGOING("Tayang"), FINISHED("Tamat") }
 
+/** Content types exposed by the API (verified via probe): SERIES, MOVIE, OVA, ONA, SPECIAL. */
+val AnimeTypes = listOf("Series", "Movie", "OVA", "ONA", "Special")
+
 data class ExploreFilters(
     val query: String = "",
     val genre: String? = null,
     val status: StatusFilter = StatusFilter.ALL,
     val sort: SortOrder = SortOrder.POPULAR,
+    val type: String? = null,
 ) {
-    val activeCount: Int get() = listOfNotNull(genre, status.takeIf { it != StatusFilter.ALL }).size
+    val activeCount: Int get() = listOfNotNull(genre, status.takeIf { it != StatusFilter.ALL }, type).size
 }
 
 data class ExploreUiState(
@@ -85,7 +89,8 @@ class ExploreViewModel(
     fun setGenre(genre: String?) = updateFilters { it.copy(genre = genre) }
     fun setStatus(status: StatusFilter) = updateFilters { it.copy(status = status) }
     fun setSort(sort: SortOrder) = updateFilters { it.copy(sort = sort) }
-    fun clearFilters() = updateFilters { it.copy(genre = null, status = StatusFilter.ALL) }
+    fun setType(type: String?) = updateFilters { it.copy(type = type) }
+    fun clearFilters() = updateFilters { it.copy(genre = null, status = StatusFilter.ALL, type = null) }
 
     private fun updateFilters(change: (ExploreFilters) -> ExploreFilters) {
         val before = _state.value.filters
@@ -137,6 +142,7 @@ class ExploreViewModel(
         val filtered = raw.filter { a ->
             (f.genre == null || a.genres.any { it.equals(f.genre, ignoreCase = true) } ||
                 (f.genre.equals("Isekai", true) && a.synopsis.contains("isekai", true))) &&
+                (f.type == null || a.type.equals(f.type, ignoreCase = true)) &&
                 when (f.status) {
                     StatusFilter.ALL -> true
                     StatusFilter.ONGOING -> a.isOngoing
