@@ -222,6 +222,21 @@ private fun DetailScreen(
                 }
                 item(key = "synopsis") { Synopsis(anime.synopsis) }
                 item(key = "info") { InfoGrid(anime) }
+                if (state.seasons.isNotEmpty()) {
+                    item(key = "seasons") {
+                        Column(Modifier.padding(top = 24.dp)) {
+                            SectionHeader("Season & Terkait")
+                            Spacer(Modifier.height(12.dp))
+                            val labels = state.seasons.associate { it.anime.id to it.label }
+                            PosterRow(
+                                state.seasons.map { it.anime },
+                                loading = false,
+                                onClick = onAnimeClick,
+                                caption = { a -> labels[a.id]?.takeIf { it.isNotBlank() } },
+                            )
+                        }
+                    }
+                }
                 if (state.similar.isNotEmpty()) {
                     item(key = "similar") {
                         Column(Modifier.padding(top = 24.dp)) {
