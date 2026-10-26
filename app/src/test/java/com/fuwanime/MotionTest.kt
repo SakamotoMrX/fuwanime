@@ -1,0 +1,47 @@
+package com.fuwanime
+
+import com.fuwanime.ui.motion.StaggerState
+import com.fuwanime.ui.motion.isReduceMotion
+import com.fuwanime.ui.motion.sharedEpisodeKey
+import com.fuwanime.ui.motion.sharedPosterKey
+import com.fuwanime.ui.motion.staggerDelay
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class MotionTest {
+    @Test
+    fun sharedKeys_includeOriginSoTheSameAnimeInTwoRowsDoesNotClash() {
+        assertEquals("poster-123-home-popular", sharedPosterKey("123", "home-popular"))
+        assertNotEquals(sharedPosterKey("123", "home-popular"), sharedPosterKey("123", "home-season"))
+        assertEquals("episode-9-detail", sharedEpisodeKey("9", "detail"))
+        assertNotEquals(sharedPosterKey("9", "detail"), sharedEpisodeKey("9", "detail"))
+    }
+
+    @Test
+    fun staggerDelay_growsPerItemAndCaps() {
+        assertEquals(0, staggerDelay(0))
+        assertEquals(35, staggerDelay(1))
+        assertEquals(280, staggerDelay(8))
+        assertEquals(280, staggerDelay(40))
+        assertEquals(0, staggerDelay(-3))
+    }
+
+    @Test
+    fun staggerState_animatesEachEarlyItemOnlyOnce() {
+        val state = StaggerState()
+        assertTrue(state.shouldAnimate("a", 0))
+        assertFalse(state.shouldAnimate("a", 0)) // scrolled back into view: no replay
+        assertTrue(state.shouldAnimate("b", 11))
+        assertFalse(state.shouldAnimate("c", 12)) // beyond the first screenful: appear instantly
+    }
+
+    @Test
+    fun reduceMotion_onlyWhenAnimationsAreOff() {
+        assertTrue(isReduceMotion(0f))
+        assertFalse(isReduceMotion(1f))
+        assertFalse(isReduceMotion(0.5f))
+    }
+}
