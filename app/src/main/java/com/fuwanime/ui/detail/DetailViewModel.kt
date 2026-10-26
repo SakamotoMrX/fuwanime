@@ -92,10 +92,8 @@ class DetailViewModel(
     /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
     private suspend fun loadSimilar(anime: Anime) {
         val genres = anime.genres.take(2).map { it.lowercase() }
-        if (genres.isEmpty()) {
-            _messages.value = "DBG: genres empty"
-            return
-        }
+        _messages.value = "DBG-start: genres=$genres"
+        if (genres.isEmpty()) return
         val result = repo.explore(0, SortOrder.POPULAR)
         val items = result.getOrNull().orEmpty()
         val err = result.exceptionOrNull()?.let { it.friendlyMessage() } ?: "none"
@@ -104,11 +102,11 @@ class DetailViewModel(
                 candidate.genres.any { genres.contains(it.lowercase()) }
         }.take(12)
         _state.update { s ->
-            if (s.anime?.id != anime.id) return@update s
+            if (s.anime?.id != anime.id) return@update s.copy(similar = s.similar)
             s.copy(similar = matched)
         }
         _messages.value =
-            "DBG items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} " +
+            "DBG-end items=${items.size} withGenres=${items.count { it.genres.isNotEmpty() }} " +
                 "matched=${matched.size} err=$err"
     }
 
