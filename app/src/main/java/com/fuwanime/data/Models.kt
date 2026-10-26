@@ -108,8 +108,21 @@ fun EpisodeDto.toEpisode(): Episode {
         thumbnail = imageUrl(image),
         releaseDate = keyTime.orEmpty(),
         views = views?.toLongOrNull() ?: 0,
+        isNew = when (val n = isNew) {
+            is String -> n.trim() == "1" || n.trim().equals("true", ignoreCase = true)
+            is Number -> n.toInt() == 1
+            is Boolean -> n
+            else -> false
+        },
     )
 }
+
+/** The latest-episodes feed reuses `genre` for the episode label, so the anime gets no genres from it. */
+fun AnimeDto.toLatestRelease() = LatestRelease(
+    anime = toAnime().copy(genres = emptyList()),
+    episodeLabel = genre?.trim()?.takeIf { it.startsWith("Episode", ignoreCase = true) }.orEmpty(),
+    updatedAt = keyTimeUpdate?.trim().orEmpty(),
+)
 
 fun ServerDto.toSource() = StreamSource(
     url = link.trim(),

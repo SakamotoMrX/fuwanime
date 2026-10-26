@@ -31,12 +31,13 @@ class AnimeRepository(private val api: AnimeApiService) {
         return list
     }
 
-    /** Detail responses carry fields (studio) list responses lack, and vice versa. */
+    /** Detail responses carry fields (studio) list responses lack, and vice versa; feeds without genres keep known ones. */
     private fun mergeAnime(old: Anime, new: Anime) = new.copy(
         studio = new.studio.ifBlank { old.studio },
         nextAirTime = new.nextAirTime.ifBlank { old.nextAirTime },
         cover = new.cover.ifBlank { old.cover },
         poster = new.poster.ifBlank { old.poster },
+        genres = new.genres.ifEmpty { old.genres },
     )
 
     suspend fun explore(
@@ -56,7 +57,14 @@ class AnimeRepository(private val api: AnimeApiService) {
             remember(items.map { it.toAnime() }.distinctBy { it.id })
         }
 
-    suspend fun latestReleases(limit: Int = 20): Result<List<LatestRelease>> = TODO()
+    suspend fun latestReleases(limit: Int = 20): Result<List<LatestRelease>> = io {
+        val releases = api.latestEpisodes(limit).data?.movie.orEmpty()
+            .filter { it.id.isNotBlank() }
+            .map { it.toLatestRelease() }
+            .distinctBy { it.anime.id }
+        remember(releases.map { it.anime })
+        releases.map { r -> r.copy(anime = animeCache[r.anime.id] ?: r.anime) }
+    }
 
     suspend fun schedule(day: String): Result<List<Anime>> = io {
         remember(api.schedule(day.lowercase()).data?.movie.orEmpty().map { it.toAnime() })

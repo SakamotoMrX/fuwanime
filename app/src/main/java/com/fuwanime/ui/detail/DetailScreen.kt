@@ -524,11 +524,24 @@ private fun EpisodeRow(
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                "Episode ${ep.number}",
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isResume) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Episode ${ep.number}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (isResume) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+                if (ep.isNew) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "BARU",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                    )
+                }
+            }
             if (ep.title.isNotBlank() && ep.title != "Episode ${ep.number}") {
                 Text(ep.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
