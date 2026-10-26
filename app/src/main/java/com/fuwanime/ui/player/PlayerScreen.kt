@@ -13,6 +13,7 @@ import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -127,6 +128,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.compose.animation.core.tween
+import com.fuwanime.ui.motion.LocalNavScope
 import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.Motion
@@ -262,6 +264,8 @@ fun PlayerRoute(
 
     val player = remember { buildPlayer(context) }
     val initialEpisodeId = remember { state.episode.id }
+    // The nav-arg thumbnail, which is what flew in; the stream may report a different URL for the same image.
+    val initialThumbnail = remember { state.episode.thumbnail }
     val playback = remember { PlaybackState() }
     var speed by remember { mutableFloatStateOf(1f) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
@@ -437,6 +441,7 @@ fun PlayerRoute(
             sleepExpired = sleepExpired,
             // Only the episode that was tapped has a thumbnail to fly in; later episodes just fade.
             thumbnailKey = origin?.takeIf { state.episode.id == initialEpisodeId }?.let { sharedEpisodeKey(initialEpisodeId, it) },
+            placeholderUrl = if (state.episode.id == initialEpisodeId) initialThumbnail.ifBlank { state.episode.thumbnail } else state.episode.thumbnail,
             autoSkipHandledFor = autoSkipHandledFor,
             onAutoSkipped = { autoSkipHandledFor = it },
             fullscreen = fullscreen,
@@ -524,6 +529,7 @@ fun PlayerRoute(
 }
 
 @OptIn(UnstableApi::class)
+@kotlin.OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun VideoSurface(
     player: ExoPlayer,
@@ -536,6 +542,7 @@ private fun VideoSurface(
     sleep: SleepOption,
     sleepExpired: Boolean,
     thumbnailKey: String?,
+    placeholderUrl: String,
     autoSkipHandledFor: String?,
     onAutoSkipped: (String) -> Unit,
     fullscreen: Boolean,
@@ -593,16 +600,19 @@ private fun VideoSurface(
         )
 
         // Thumbnail until the first frame: the landing spot for the shared thumbnail, then a soft reveal.
+        // Held while the open transition runs, so a fast first frame never cuts the flying thumbnail short.
+        val navTransitionRunning = LocalNavScope.current?.transition?.isRunning == true
         AnimatedVisibility(
-            visible = !playback.firstFrame && state.episode.thumbnail.isNotBlank(),
+            visible = (!playback.firstFrame || navTransitionRunning) && !state.offline && placeholderUrl.isNotBlank(),
             enter = fadeIn(tween(Motion.Short)),
             exit = fadeOut(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)),
             modifier = Modifier.fillMaxSize(),
         ) {
-            NetImage(
-                state.episode.thumbnail,
-                Modifier.fillMaxSize().sharedKey(thumbnailKey),
-            )
+            Box(Modifier.fillMaxSize()) {
+                NetImage(placeholderUrl, Modifier.fillMaxSize().sharedKey(thumbnailKey))
+                // Keeps the white loading text legible on bright thumbnails.
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
+            }
         }
 
         if (inPip) return@Box

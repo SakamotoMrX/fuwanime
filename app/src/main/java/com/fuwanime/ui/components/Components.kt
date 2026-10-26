@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +85,8 @@ fun NetImage(
     Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         if (url.isNotBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(context).data(url).crossfade(250).build(),
+                // Reuse whatever size of this image is already in memory, so shared elements never fly as a grey box.
+                model = ImageRequest.Builder(context).data(url).placeholderMemoryCacheKey(url).crossfade(250).build(),
                 contentDescription = contentDescription,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
@@ -173,7 +173,8 @@ fun PosterCard(
             // Only the image is shared: badges and scrim stay on the card while the poster flies.
             NetImage(
                 anime.poster,
-                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) }),
+                // Clip after the shared key so the flying copy keeps its rounded corners.
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) }).clip(MaterialTheme.shapes.medium),
                 anime.title,
             )
             // Bottom scrim keeps badges legible on bright posters.
@@ -318,7 +319,7 @@ fun ContinueWatchingCard(
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)) {
             NetImage(
                 entry.episodeThumbnail.ifBlank { entry.animeCover },
-                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }),
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }).clip(MaterialTheme.shapes.medium),
             )
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
             Surface(

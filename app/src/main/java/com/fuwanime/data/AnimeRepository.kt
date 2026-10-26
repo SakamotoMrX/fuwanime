@@ -29,6 +29,11 @@ class AnimeRepository(private val api: AnimeApiService) {
 
     fun cachedAnime(id: String): Anime? = animeCache[id]
 
+    /** Seeds the cache with what a list already shows, so the next screen can draw it before loading. */
+    fun prime(anime: Anime) {
+        if (anime.id.isNotBlank()) animeCache.putIfAbsent(anime.id, anime)
+    }
+
     /** Lower-case genre name -> id for the genre endpoint; fetched once. */
     @Volatile
     private var genreIds: Map<String, String>? = null

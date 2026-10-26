@@ -63,6 +63,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.staggerIn
 import com.fuwanime.ui.motion.rememberStaggerState
 import com.fuwanime.ui.motion.OpenAnime
@@ -267,8 +270,15 @@ private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClic
         if (nearEnd && state.results.isNotEmpty() && !state.loading) vm.loadMore()
     }
 
-    when {
-        state.loading && state.results.isEmpty() -> LazyVerticalGrid(
+    val branch = when {
+        state.loading && state.results.isEmpty() -> ResultsBranch.LOADING
+        state.error != null && state.results.isEmpty() -> ResultsBranch.ERROR
+        state.results.isEmpty() && !state.loadingMore -> ResultsBranch.EMPTY
+        else -> ResultsBranch.RESULTS
+    }
+    Crossfade(branch, animationSpec = tween(Motion.Medium), label = "exploreResults") { shown ->
+    when (shown) {
+        ResultsBranch.LOADING -> LazyVerticalGrid(
             columns = GridCells.Adaptive(108.dp),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -276,9 +286,9 @@ private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClic
             userScrollEnabled = false,
         ) { items(12) { PosterSkeleton() } }
 
-        state.error != null && state.results.isEmpty() -> ErrorState(state.error, vm::reload)
+        ResultsBranch.ERROR -> ErrorState(state.error.orEmpty(), vm::reload)
 
-        state.results.isEmpty() && !state.loadingMore -> MessageState(
+        ResultsBranch.EMPTY -> MessageState(
             icon = Icons.Rounded.SearchOff,
             title = "Tidak ada hasil",
             message = "Coba kata kunci lain atau longgarkan filter.",
@@ -286,7 +296,7 @@ private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClic
             onAction = if (state.filters.activeCount > 0) vm::clearFilters else null,
         )
 
-        else -> LazyVerticalGrid(
+        ResultsBranch.RESULTS -> LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(108.dp),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
@@ -318,4 +328,7 @@ private fun ResultsGrid(state: ExploreUiState, vm: ExploreViewModel, onAnimeClic
             }
         }
     }
+    }
 }
+
+private enum class ResultsBranch { LOADING, ERROR, EMPTY, RESULTS }

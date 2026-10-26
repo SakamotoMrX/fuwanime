@@ -32,10 +32,26 @@ class MotionTest {
     @Test
     fun staggerState_animatesEachEarlyItemOnlyOnce() {
         val state = StaggerState()
-        assertTrue(state.shouldAnimate("a", 0))
-        assertFalse(state.shouldAnimate("a", 0)) // scrolled back into view: no replay
-        assertTrue(state.shouldAnimate("b", 11))
-        assertFalse(state.shouldAnimate("c", 12)) // beyond the first screenful: appear instantly
+        assertTrue(state.shouldAnimate("a", 0, elapsedMs = 0))
+        assertFalse(state.shouldAnimate("a", 0, elapsedMs = 10)) // scrolled back into view: no replay
+        assertTrue(state.shouldAnimate("b", 11, elapsedMs = 100))
+        assertFalse(state.shouldAnimate("c", 12, elapsedMs = 100)) // beyond the first screenful
+    }
+
+    @Test
+    fun staggerState_itemsComposedLaterByScrollingAppearInstantly() {
+        val state = StaggerState()
+        assertTrue(state.shouldAnimate("a", 0, elapsedMs = 0))
+        assertFalse(state.shouldAnimate("d", 3, elapsedMs = 2_000))
+    }
+
+    @Test
+    fun staggerState_survivesSaveAndRestore() {
+        val state = StaggerState()
+        state.shouldAnimate("a", 0, elapsedMs = 0)
+        val restored = StaggerState.restore(state.save())
+        assertFalse(restored.shouldAnimate("a", 0, elapsedMs = 0)) // back from detail: no replay
+        assertTrue(restored.shouldAnimate("b", 1, elapsedMs = 0))
     }
 
     @Test

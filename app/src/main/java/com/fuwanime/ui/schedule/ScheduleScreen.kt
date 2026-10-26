@@ -156,7 +156,7 @@ fun ScheduleRoute(onAnimeClick: OpenAnime) {
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(schedule.items, key = { it.id }) { anime ->
-                            ScheduleRow(anime, onClick = { onAnimeClick(anime, "schedule") })
+                            ScheduleRow(anime, origin = "schedule-${day.apiValue}", onClick = { onAnimeClick(anime, "schedule-${day.apiValue}") })
                         }
                     }
                 }
@@ -166,7 +166,7 @@ fun ScheduleRoute(onAnimeClick: OpenAnime) {
 }
 
 @Composable
-private fun ScheduleRow(anime: Anime, onClick: () -> Unit) {
+private fun ScheduleRow(anime: Anime, origin: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -177,7 +177,7 @@ private fun ScheduleRow(anime: Anime, onClick: () -> Unit) {
     ) {
         NetImage(
             anime.poster,
-            Modifier.width(76.dp).aspectRatio(2f / 3f).sharedKey(sharedPosterKey(anime.id, "schedule")).clip(MaterialTheme.shapes.small),
+            Modifier.width(76.dp).aspectRatio(2f / 3f).sharedKey(sharedPosterKey(anime.id, origin)).clip(MaterialTheme.shapes.small),
             anime.title,
         )
         Spacer(Modifier.width(14.dp))

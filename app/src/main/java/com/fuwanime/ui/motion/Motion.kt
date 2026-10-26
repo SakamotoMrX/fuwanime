@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 
 /** Motion tokens: between snappy and cinematic, on Material 3's emphasized curves. */
@@ -49,21 +51,39 @@ private const val STAGGER_STEP_MS = 35
 private const val STAGGER_MAX_STEPS = 8
 private const val STAGGER_ITEMS = 12
 
+/** Only items composed this soon after a list first shows count as "first screenful". */
+private const val STAGGER_WINDOW_MS = 600L
+
 fun staggerDelay(index: Int): Int = index.coerceIn(0, STAGGER_MAX_STEPS) * STAGGER_STEP_MS
 
 /** The system "remove animations" setting sets the animator scale to 0. */
 fun isReduceMotion(animatorScale: Float): Boolean = animatorScale == 0f
 
-/** Remembers which list items already played their entrance, so scrolling back never replays it. */
-class StaggerState {
-    private val played = HashSet<Any>()
+/**
+ * Remembers which list items already played their entrance, so scrolling back or returning from another
+ * screen never replays it. Saveable, so it survives lazy-item disposal and back navigation.
+ */
+class StaggerState private constructor(private val played: HashSet<String>) {
+    constructor() : this(HashSet())
 
-    /** True the first time an item within the first screenful shows up. */
-    fun shouldAnimate(key: Any, index: Int): Boolean = index < STAGGER_ITEMS && played.add(key)
+    /** Start of this list's first appearance; items composed long after it come from scrolling. */
+    val createdAtMs: Long = System.currentTimeMillis()
+
+    /** True the first time an early item shows up within the first-appearance window. */
+    fun shouldAnimate(key: String, index: Int, elapsedMs: Long): Boolean =
+        index < STAGGER_ITEMS && elapsedMs < STAGGER_WINDOW_MS && played.add(key)
+
+    fun save(): List<String> = played.toList()
+
+    companion object {
+        fun restore(saved: List<String>) = StaggerState(saved.toHashSet())
+
+        val Saver: Saver<StaggerState, ArrayList<String>> = Saver(save = { ArrayList(it.save()) }, restore = { restore(it) })
+    }
 }
 
 @Composable
-fun rememberStaggerState(): StaggerState = remember { StaggerState() }
+fun rememberStaggerState(): StaggerState = rememberSaveable(saver = StaggerState.Saver) { StaggerState() }
 
 @Composable
 fun rememberReduceMotion(): Boolean {
@@ -113,9 +133,11 @@ fun Modifier.navEnter(delayMs: Int = 120, rise: Boolean = true): Modifier = comp
 }
 
 /** First-appearance fade + rise for list items, staggered by [index] and played once per [state]. */
-fun Modifier.staggerIn(state: StaggerState, key: Any, index: Int): Modifier = composed {
+fun Modifier.staggerIn(state: StaggerState, key: String, index: Int): Modifier = composed {
     val reduce = LocalReduceMotion.current
-    val animate = remember(key) { !reduce && state.shouldAnimate(key, index) }
+    val animate = remember(key) {
+        !reduce && state.shouldAnimate(key, index, System.currentTimeMillis() - state.createdAtMs)
+    }
     val progress = remember(key) { Animatable(if (animate) 0f else 1f) }
     LaunchedEffect(key) {
         if (animate) {

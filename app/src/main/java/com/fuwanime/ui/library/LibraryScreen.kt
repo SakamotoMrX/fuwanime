@@ -178,7 +178,7 @@ private fun HistoryList(
                 Box(Modifier.width(140.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)) {
                     NetImage(
                         entry.episodeThumbnail.ifBlank { entry.animeCover },
-                        Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(entry.episodeId, "library")),
+                        Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(entry.episodeId, "library")).clip(MaterialTheme.shapes.small),
                     )
                     LinearProgressIndicator(
                         progress = { entry.progress },

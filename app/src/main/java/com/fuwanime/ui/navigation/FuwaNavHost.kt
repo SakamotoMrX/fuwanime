@@ -47,6 +47,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.ui.platform.LocalContext
+import com.fuwanime.FuwaApp
 import com.fuwanime.data.Anime
 import com.fuwanime.ui.motion.LocalNavScope
 import com.fuwanime.ui.motion.LocalReduceMotion
@@ -99,6 +102,10 @@ private val FadeThroughIn = fadeIn(tween(Motion.Medium, 90, Motion.EmphasizedDec
 private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAccelerate))
 private val OverlayIn = fadeIn(tween(Motion.Medium, easing = Motion.EmphasizedDecelerate))
 private val OverlayOut = fadeOut(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate))
+private val OverlayPopOut = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate))
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() =
+    initialState.isOverlay() || targetState.isOverlay()
 
 /** Exposes the destination's enter/exit scope to shared elements and entrance animations inside it. */
 @Composable
@@ -129,7 +136,12 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
         }
     }
 
-    val openAnime: (Anime, String) -> Unit = { anime, from -> nav.navigate(Routes.detail(anime.id, from)) }
+    val animeRepository = (LocalContext.current.applicationContext as FuwaApp).container.animeRepository
+    val openAnime: (Anime, String) -> Unit = { anime, from ->
+        // The detail header needs the poster on its first frame to be the shared poster's landing spot.
+        animeRepository.prime(anime)
+        nav.navigate(Routes.detail(anime.id, from))
+    }
     val play: (String, Episode, String?) -> Unit = { animeId, ep, from ->
         nav.navigate(Routes.player(animeId, ep.id, ep.number, ep.thumbnail, from))
     }
@@ -173,10 +185,11 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                         navController = nav,
                         startDestination = Routes.HOME,
                         // Tabs fade through; anything involving detail/player fades under its shared element.
-                        enterTransition = { if (initialState.isOverlay()) OverlayIn else FadeThroughIn },
-                        exitTransition = { if (targetState.isOverlay()) OverlayOut else FadeThroughOut },
-                        popEnterTransition = { if (initialState.isOverlay()) OverlayIn else FadeThroughIn },
-                        popExitTransition = { if (targetState.isOverlay()) OverlayOut else FadeThroughOut },
+                        enterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
+                        exitTransition = { if (involvesOverlay()) OverlayOut else FadeThroughOut },
+                        popEnterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
+                        // Closing detail/player: its content clears quickly while the shared element flies back.
+                        popExitTransition = { if (involvesOverlay()) OverlayPopOut else FadeThroughOut },
                     ) {
                         composable(Routes.HOME) {
                             Scoped {
@@ -235,6 +248,7 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                             Scoped {
                                 DetailRoute(
                                     origin = entry.from(),
+                                    entryKey = entry.id,
                                     onBack = { nav.popBackStack() },
                                     onPlay = { anime, ep, from -> play(anime.id, ep, from) },
                                     onAnimeClick = openAnime,
@@ -251,6 +265,11 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                 navArgument("thumb") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("from") { type = NavType.StringType; defaultValue = "" },
                             ),
+                            // The video surface ignores alpha, so the player slides away instead of only fading.
+                            popExitTransition = {
+                                slideOutVertically(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)) { it / 4 } +
+                                    fadeOut(tween(Motion.Short))
+                            },
                         ) { entry ->
                             Scoped { PlayerRoute(origin = entry.from(), onBack = { nav.popBackStack() }) }
                         }

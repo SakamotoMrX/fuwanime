@@ -118,6 +118,8 @@ import com.fuwanime.util.fuwaViewModel
 fun DetailRoute(
     /** Row the poster was tapped in; keys the shared poster transition. */
     origin: String?,
+    /** Unique per back-stack entry, so rows on stacked detail pages never share keys. */
+    entryKey: String,
     onBack: () -> Unit,
     onPlay: (anime: Anime, episode: Episode, from: String?) -> Unit,
     onAnimeClick: OpenAnime,
@@ -145,6 +147,7 @@ fun DetailRoute(
             downloads,
             vm,
             origin,
+            entryKey,
             onBack,
             onPlay,
             onAnimeClick,
@@ -164,6 +167,7 @@ private fun DetailScreen(
     downloads: Map<String, DownloadItem>,
     vm: DetailViewModel,
     origin: String?,
+    entryKey: String,
     onBack: () -> Unit,
     onPlay: (Anime, Episode, String?) -> Unit,
     onAnimeClick: OpenAnime,
@@ -173,6 +177,8 @@ private fun DetailScreen(
     val listState = rememberLazyListState()
     val stagger = rememberStaggerState()
     var favoritePop by remember { mutableIntStateOf(0) }
+    // Outlives the lazy "actions" item, so scrolling it back never replays the pop.
+    var favoritePopShown by rememberSaveable { mutableIntStateOf(0) }
     val resume = remember(progress) { progress.values.maxByOrNull { it.updatedAt } }
 
     Box(Modifier.fillMaxSize()) {
@@ -221,7 +227,7 @@ private fun DetailScreen(
                             checkedContentColor = MaterialTheme.colorScheme.secondary,
                         ),
                     ) {
-                        FavoriteIcon(favorite, favoritePop)
+                        FavoriteIcon(favorite, favoritePop, favoritePopShown) { favoritePopShown = it }
                     }
                 }
             }
@@ -257,9 +263,9 @@ private fun DetailScreen(
                             PosterRow(
                                 state.seasons.map { it.anime },
                                 loading = false,
-                                onClick = { onAnimeClick(it, "season") },
+                                onClick = { onAnimeClick(it, "season-$entryKey") },
                                 caption = { a -> labels[a.id]?.takeIf { it.isNotBlank() } },
-                                origin = "season",
+                                origin = "season-$entryKey",
                             )
                         }
                     }
@@ -269,7 +275,12 @@ private fun DetailScreen(
                         Column(Modifier.padding(top = 24.dp)) {
                             SectionHeader("Anime Serupa")
                             Spacer(Modifier.height(12.dp))
-                            PosterRow(state.similar, loading = false, onClick = { onAnimeClick(it, "similar") }, origin = "similar")
+                            PosterRow(
+                                state.similar,
+                                loading = false,
+                                onClick = { onAnimeClick(it, "similar-$entryKey") },
+                                origin = "similar-$entryKey",
+                            )
                         }
                     }
                 }
@@ -534,7 +545,7 @@ private fun EpisodeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(132.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)) {
-            NetImage(ep.thumbnail, Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(ep.id, "detail")))
+            NetImage(ep.thumbnail, Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(ep.id, "detail")).clip(MaterialTheme.shapes.small))
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.15f)))
             Icon(
                 Icons.Rounded.PlayArrow,
@@ -590,11 +601,13 @@ private fun EpisodeRow(
 
 /** Heart that pops when the anime is added to favourites; [pop] increments on each add. */
 @Composable
-private fun FavoriteIcon(favorite: Boolean, pop: Int) {
+private fun FavoriteIcon(favorite: Boolean, pop: Int, shown: Int, onShown: (Int) -> Unit) {
     val scale = remember { Animatable(1f) }
     val reduce = LocalReduceMotion.current
     LaunchedEffect(pop) {
-        if (pop > 0 && !reduce) {
+        if (pop > shown) {
+            onShown(pop)
+            if (reduce) return@LaunchedEffect
             scale.animateTo(1.3f, tween(120, easing = Motion.EmphasizedDecelerate))
             scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
         }
