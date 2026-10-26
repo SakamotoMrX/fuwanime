@@ -100,7 +100,7 @@ class DetailViewModel(
         val genres = anime.genres.take(2).map { it.lowercase() }
         debugLog("DBG-start: genres=$genres")
         if (genres.isEmpty()) return
-        val result = repo.explore(0, SortOrder.POPULAR)
+        val result = repo.explore(0, SortOrder.POPULAR.apiValue)
         val items = result.getOrNull().orEmpty()
         val err = result.exceptionOrNull()?.let { it.friendlyMessage() } ?: "none"
         val matched = items.filter { candidate ->

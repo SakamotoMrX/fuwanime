@@ -90,7 +90,7 @@ class HomeViewModel(
 
     /** Returns true when something useful was loaded. */
     private suspend fun fetch(showError: Boolean): Boolean = coroutineScope {
-        val popularJob = async { anime.explore(page = 0, sort = SortOrder.POPULAR) }
+        val popularJob = async { anime.explore(page = 0, sort = SortOrder.POPULAR.apiValue) }
         // Every day's schedule together approximates "currently airing this season".
         val dayJobs = Day.entries.map { day -> day to async { anime.schedule(day.apiValue) } }
 
