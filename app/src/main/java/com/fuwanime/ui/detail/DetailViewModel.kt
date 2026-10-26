@@ -92,13 +92,12 @@ class DetailViewModel(
     /** Popular anime sharing at least one of this anime's first two genres (single cheap call). */
     private suspend fun loadSimilar(anime: Anime) {
         val genres = anime.genres.take(2).map { it.lowercase() }
-        Log.i(TAG, "similar start: anime=${anime.id} genres=$genres")
+        println("$TAG similar start: anime=${anime.id} genres=$genres")
         if (genres.isEmpty()) return
         val result = repo.explore(0, SortOrder.POPULAR)
         val items = result.getOrNull().orEmpty()
-        Log.i(
-            TAG,
-            "similar explore: ok=${result.isSuccess} items=${items.size} " +
+        println(
+            "$TAG similar explore: ok=${result.isSuccess} items=${items.size} " +
                 "withGenres=${items.count { it.genres.isNotEmpty() }}",
         )
         _state.update { s ->
@@ -107,7 +106,7 @@ class DetailViewModel(
                 candidate.id != anime.id &&
                     candidate.genres.any { genres.contains(it.lowercase()) }
             }.take(12)
-            Log.i(TAG, "similar matched=${matched.size} of ${items.size}")
+            println("$TAG similar matched=${matched.size} of ${items.size}")
             s.copy(similar = matched)
         }
     }
