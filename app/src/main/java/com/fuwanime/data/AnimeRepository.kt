@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 enum class SortOrder(val apiValue: String, val label: String) {
     POPULAR("views", "Terpopuler"),
+    LATEST("latest", "Terbaru"),
     TITLE("alphabet", "A–Z"),
 }
 

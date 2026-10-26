@@ -32,6 +32,13 @@ data class ExploreFilters(
     val type: String? = null,
 ) {
     val activeCount: Int get() = listOfNotNull(genre, status.takeIf { it != StatusFilter.ALL }, type).size
+
+    /**
+     * Server sort used for fetching. The popular feed is dominated by SERIES, so rare
+     * content types (Movie/OVA/ONA) are only findable in the latest feed — verified by
+     * probing 360 items of both feeds through the phone's browser.
+     */
+    val apiSort: String get() = if (type != null) "latest" else sort.apiValue
 }
 
 data class ExploreUiState(
@@ -89,7 +96,15 @@ class ExploreViewModel(
     fun setGenre(genre: String?) = updateFilters { it.copy(genre = genre) }
     fun setStatus(status: StatusFilter) = updateFilters { it.copy(status = status) }
     fun setSort(sort: SortOrder) = updateFilters { it.copy(sort = sort) }
-    fun setType(type: String?) = updateFilters { it.copy(type = type) }
+    fun setType(type: String?) {
+        if (type != null) {
+            // Rare types need the latest feed as the fetch basis — refetch from page 0.
+            _state.update { it.copy(filters = it.filters.copy(type = type)) }
+            reload()
+        } else {
+            updateFilters { it.copy(type = null) }
+        }
+    }
     fun clearFilters() = updateFilters { it.copy(genre = null, status = StatusFilter.ALL, type = null) }
 
     private fun updateFilters(change: (ExploreFilters) -> ExploreFilters) {
@@ -116,10 +131,10 @@ class ExploreViewModel(
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loadingMore = !it.loading, error = null) }
             val startCount = _state.value.results.size
-            // Genre/status filtering is client-side, so keep fetching until enough new matches show up.
+            // Genre/status/type filtering is client-side, so keep fetching until enough new matches show up.
             repeat(MAX_PAGES_PER_BATCH) {
                 val f = _state.value.filters
-                val page = repo.explore(nextPage, f.sort, f.query).getOrElse { e ->
+                val page = repo.explore(nextPage, f.apiSort, f.query).getOrElse { e ->
                     _state.update { it.copy(loading = false, loadingMore = false, error = e.friendlyMessage()) }
                     return@launch
                 }
