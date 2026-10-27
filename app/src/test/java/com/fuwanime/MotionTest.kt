@@ -1,6 +1,7 @@
 package com.fuwanime
 
 import com.fuwanime.ui.motion.StaggerState
+import com.fuwanime.ui.motion.headerStillShown
 import com.fuwanime.ui.motion.isReduceMotion
 import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.sharedEpisodeKey
@@ -55,6 +56,14 @@ class MotionTest {
         val restored = StaggerState.restore(state.save())
         assertFalse(restored.shouldAnimate("a", 0, elapsedMs = 0)) // back from detail: no replay
         assertTrue(restored.shouldAnimate("b", 1, elapsedMs = 0))
+    }
+
+    @Test
+    fun headerStillShown_onlyNearTheTopOfTheList() {
+        assertTrue(headerStillShown(firstVisibleIndex = 0, firstVisibleOffsetPx = 0, maxOffsetPx = 400))
+        assertTrue(headerStillShown(firstVisibleIndex = 0, firstVisibleOffsetPx = 399, maxOffsetPx = 400))
+        assertFalse(headerStillShown(firstVisibleIndex = 0, firstVisibleOffsetPx = 400, maxOffsetPx = 400))
+        assertFalse(headerStillShown(firstVisibleIndex = 3, firstVisibleOffsetPx = 0, maxOffsetPx = 400))
     }
 
     @Test
