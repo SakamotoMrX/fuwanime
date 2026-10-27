@@ -156,11 +156,6 @@ private fun HomeScreen(
 
     PullToRefreshBox(isRefreshing = feed.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
-            if (update != null) {
-                item(key = "updateBanner") {
-                    UpdateBanner(update, onClick = { showUpdateSheet = true }, onDismiss = onDismissUpdate)
-                }
-            }
             item(key = "hero") {
                 val heroLoading = feed.loading && state.hero.isEmpty()
                 Crossfade(heroLoading, animationSpec = tween(Motion.Medium), label = "hero") { loading ->
@@ -171,6 +166,13 @@ private fun HomeScreen(
                     } else {
                         Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars).height(72.dp))
                     }
+                }
+            }
+
+            // Below the hero, not under the status bar where the edge-to-edge hero starts.
+            if (update != null) {
+                item(key = "updateBanner") {
+                    UpdateBanner(update, onClick = { showUpdateSheet = true }, onDismiss = onDismissUpdate)
                 }
             }
 
