@@ -39,6 +39,8 @@ PY
 tap() { local xy; xy=$(find_xy "$@"); [ -z "$xy" ] && { echo "not found: $1"; return 1; }; adb shell input tap $xy; echo "tapped '$1' at $xy"; }
 # Scroll down until $1 is on screen (max 8 swipes).
 scroll_to() { for _ in $(seq 1 8); do [ -n "$(find_xy "$1")" ] && return 0; adb shell input swipe 540 1700 540 900 300; sleep 1; done; echo "not found while scrolling: $1"; return 1; }
+# Like scroll_to, then bring $1 up to the top third so the row below it is fully on screen (not under the nav bar).
+scroll_row() { scroll_to "$1" || return 1; local y; y=$(find_xy "$1" | cut -d' ' -f2); [ "${y:-0}" -gt 900 ] && adb shell input swipe 540 "$y" 540 500 600; sleep 1.5; }
 alive() { adb shell pidof "$PKG" >/dev/null || { echo "::error::App process died"; adb logcat -d -b crash | tail -80; exit 1; }; }
 back_gesture() { adb shell input swipe 2 1200 520 1200 250; }
 
@@ -56,7 +58,7 @@ open_search_result() {  # $1 = query, $2 = title prefix to tap
 
 # 1. Home row poster -> detail -> key back -> scroll Home right away (must respond).
 fresh
-scroll_to "Sedang Tayang"
+scroll_row "Sedang Tayang"
 record qa1-home-detail-back
 tap "Sedang Tayang" 330 200; sleep 4; shot qa1a-detail 0
 adb shell input keyevent KEYCODE_BACK; sleep 0.3
@@ -65,11 +67,11 @@ stop_record qa1-home-detail-back; alive
 
 # 2. Same with the edge back gesture.
 fresh
-scroll_to "Sedang Tayang"
+scroll_row "Sedang Tayang"
 record qa2-gesture-back
 tap "Sedang Tayang" 330 200; sleep 4
-back_gesture; sleep 0.2; shot qa2a-after-gesture 0
-adb shell input swipe 540 1600 540 900 200; shot qa2b-home-scrolled 0.5
+shot qa2a-detail-open 0; back_gesture; sleep 0.2; shot qa2b-after-gesture 0
+adb shell input swipe 540 1600 540 900 200; shot qa2c-home-scrolled 0.5
 stop_record qa2-gesture-back; alive
 
 # 3. Search -> detail with seasons -> Season & Terkait -> scroll the new page at once -> back -> back.
