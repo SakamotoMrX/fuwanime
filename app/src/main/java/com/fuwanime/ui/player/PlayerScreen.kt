@@ -130,7 +130,6 @@ import androidx.media3.ui.PlayerView
 import androidx.compose.animation.core.tween
 import com.fuwanime.ui.motion.LocalNavScope
 import com.fuwanime.ui.motion.sharedKey
-import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.FuwaApp
 import com.fuwanime.util.formatBytes
@@ -232,8 +231,8 @@ private fun ExoPlayer.effectivePosition(playback: PlaybackState): Long = playbac
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerRoute(
-    /** Where the episode was tapped; keys the shared thumbnail transition. */
-    origin: String? = null,
+    /** Key of the image (episode thumbnail or detail backdrop) that flies into the video area. */
+    sharedKey: String? = null,
     onBack: () -> Unit,
 ) {
     val appContext = LocalContext.current.applicationContext
@@ -440,7 +439,7 @@ fun PlayerRoute(
             sleep = sleep,
             sleepExpired = sleepExpired,
             // Only the episode that was tapped has a thumbnail to fly in; later episodes just fade.
-            thumbnailKey = origin?.takeIf { state.episode.id == initialEpisodeId }?.let { sharedEpisodeKey(initialEpisodeId, it) },
+            thumbnailKey = sharedKey?.takeIf { state.episode.id == initialEpisodeId },
             placeholderUrl = if (state.episode.id == initialEpisodeId) initialThumbnail.ifBlank { state.episode.thumbnail } else state.episode.thumbnail,
             autoSkipHandledFor = autoSkipHandledFor,
             onAutoSkipped = { autoSkipHandledFor = it },
@@ -585,8 +584,14 @@ private fun VideoSurface(
 
     val seekStepMs = settings.doubleTapSeekSeconds * 1000L
 
+    // Inflating PlayerView (a SurfaceView) is heavy; doing it on the transition's first frame made the flying
+    // thumbnail stall. It is attached once the open transition settles; the thumbnail covers the wait.
+    val navTransitionRunning = LocalNavScope.current?.transition?.isRunning == true
+    var surfaceReady by remember { mutableStateOf(!navTransitionRunning) }
+    LaunchedEffect(navTransitionRunning) { if (!navTransitionRunning) surfaceReady = true }
+
     Box(modifier.background(Color.Black)) {
-        AndroidView(
+        if (surfaceReady) AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
@@ -601,7 +606,6 @@ private fun VideoSurface(
 
         // Thumbnail until the first frame: the landing spot for the shared thumbnail, then a soft reveal.
         // Held while the open transition runs, so a fast first frame never cuts the flying thumbnail short.
-        val navTransitionRunning = LocalNavScope.current?.transition?.isRunning == true
         AnimatedVisibility(
             visible = (!playback.firstFrame || navTransitionRunning) && !state.offline && placeholderUrl.isNotBlank(),
             enter = fadeIn(tween(Motion.Short)),
