@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.mutableIntStateOf
 import com.fuwanime.ui.motion.rememberIsEntering
+import com.fuwanime.ui.motion.rememberIsExiting
 import com.fuwanime.ui.motion.headerStillShown
 import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.staggerIn
@@ -194,6 +195,8 @@ private fun DetailScreen(
                 headerStillShown(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, HEADER_LINK_MAX_OFFSET_PX)
             }
         }
+        // The poster only flies in. Flying back on close crossed over the other posters on its way down to its card.
+        val exiting = rememberIsExiting()
         val linkHeader = headerShown && !(entering && listState.isScrollInProgress)
         LazyColumn(
             state = listState,
@@ -201,8 +204,7 @@ private fun DetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             // Once the header is scrolled away, closing just fades instead of flying a poster in from off-screen.
-            // The poster flies back on close too, as long as the header is still on screen.
-            item(key = "header") { Header(anime, origin.takeIf { linkHeader }, entryKey, linkBackdrop = linkHeader) }
+            item(key = "header") { Header(anime, origin.takeIf { linkHeader && !exiting }, entryKey, linkBackdrop = linkHeader) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }
