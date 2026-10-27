@@ -2,10 +2,16 @@ package com.fuwanime.ui.motion
 
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
@@ -30,10 +36,10 @@ import kotlinx.coroutines.delay
 object Motion {
     const val Short = 200
     const val Medium = 350
+    const val Long = 420
 
-    /** Page slide/fade when opening or closing detail and player. */
-    const val Page = 250
-    const val PageExit = 200
+    /** How fast a detail/player page covers the one beneath it; short so two pages never show through each other. */
+    const val Cover = 150
 
     val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
@@ -103,10 +109,30 @@ fun rememberReduceMotion(): Boolean {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
+
 /** The enclosing navigation destination's enter/exit scope. */
 val LocalNavScope = staticCompositionLocalOf<AnimatedVisibilityScope?> { null }
 
 val LocalReduceMotion = staticCompositionLocalOf { false }
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val SharedBounds = BoundsTransform { _, _ -> tween(Motion.Long, easing = Motion.Emphasized) }
+
+/**
+ * Makes this element fly between screens that use the same [key]. A no-op without a key, outside the
+ * navigation scopes (previews, PiP) or when animations are off.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+fun Modifier.sharedKey(key: String?): Modifier = composed {
+    val shared = LocalSharedScope.current
+    val nav = LocalNavScope.current
+    if (key == null || shared == null || nav == null || LocalReduceMotion.current) return@composed Modifier
+    with(shared) {
+        Modifier.sharedElement(rememberSharedContentState(key), nav, boundsTransform = SharedBounds)
+    }
+}
 
 /** True while this destination is animating in (for dropping shared-element links the user scrolls away from). */
 @OptIn(ExperimentalAnimationApi::class)
@@ -129,6 +155,20 @@ fun rememberIsExiting(): Boolean = LocalNavScope.current?.transition?.targetStat
 fun Modifier.passTouchesThrough(enabled: Boolean): Modifier = if (!enabled) this else layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     layout(0, 0) { placeable.place(0, 0) }
+}
+
+/** Destination content that fades (and with [rise], rises) into place after a shared element starts flying. */
+fun Modifier.navEnter(delayMs: Int = 120, rise: Boolean = true): Modifier = composed {
+    val nav = LocalNavScope.current
+    if (nav == null || LocalReduceMotion.current) return@composed Modifier
+    val risePx = if (rise) with(LocalDensity.current) { 24.dp.roundToPx() } else 0
+    with(nav) {
+        Modifier.animateEnterExit(
+            enter = fadeIn(tween(Motion.Medium, delayMs, Motion.EmphasizedDecelerate)) +
+                slideInVertically(tween(Motion.Medium, delayMs, Motion.EmphasizedDecelerate)) { risePx },
+            exit = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate)),
+        )
+    }
 }
 
 /** First-appearance fade + rise for list items, staggered by [index] and played once per [state]. */

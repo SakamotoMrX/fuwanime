@@ -131,6 +131,7 @@ import androidx.compose.animation.core.tween
 import com.fuwanime.ui.motion.rememberIsExiting
 import com.fuwanime.ui.motion.rememberIsEntering
 import com.fuwanime.ui.motion.LocalNavScope
+import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.FuwaApp
 import com.fuwanime.util.formatBytes
@@ -617,7 +618,7 @@ private fun VideoSurface(
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(Modifier.fillMaxSize()) {
-                NetImage(placeholderUrl, Modifier.fillMaxSize())
+                NetImage(placeholderUrl, Modifier.fillMaxSize().sharedKey(thumbnailKey.takeIf { !exiting }))
                 // Keeps the white loading text legible on bright thumbnails.
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
             }
