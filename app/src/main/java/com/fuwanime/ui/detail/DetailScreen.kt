@@ -186,21 +186,22 @@ private fun DetailScreen(
     val resume = remember(progress) { progress.values.maxByOrNull { it.updatedAt } }
 
     Box(Modifier.fillMaxSize()) {
-        // Scrolling while the poster flies made it chase the header; hold the list for the short enter transition.
+        // Scrolling while the poster flies used to make it chase the header. Instead of locking the list, the link
+        // is dropped the moment the user scrolls mid-transition: the poster settles into the header and scrolls with it.
         val entering = rememberIsEntering()
         val headerShown by remember {
             derivedStateOf {
                 headerStillShown(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, HEADER_LINK_MAX_OFFSET_PX)
             }
         }
+        val linkHeader = headerShown && !(entering && listState.isScrollInProgress)
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 32.dp),
-            userScrollEnabled = !entering,
             modifier = Modifier.fillMaxSize(),
         ) {
             // Once the header is scrolled away, closing just fades instead of flying a poster in from off-screen.
-            item(key = "header") { Header(anime, origin.takeIf { headerShown }, entryKey, linkBackdrop = headerShown) }
+            item(key = "header") { Header(anime, origin.takeIf { linkHeader }, entryKey, linkBackdrop = linkHeader) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }

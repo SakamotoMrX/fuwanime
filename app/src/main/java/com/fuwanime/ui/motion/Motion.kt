@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 object Motion {
     const val Short = 200
     const val Medium = 350
-    const val Long = 480
+    const val Long = 420
 
     /** How fast a detail/player page covers the one beneath it; short so two pages never show through each other. */
     const val Cover = 150
@@ -133,10 +133,7 @@ fun Modifier.sharedKey(key: String?): Modifier = composed {
     }
 }
 
-/**
- * True while this destination is animating in. Lists hold their scroll meanwhile, so a shared element lands on a
- * target that is not moving.
- */
+/** True while this destination is animating in (for dropping shared-element links the user scrolls away from). */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun rememberIsEntering(): Boolean {
