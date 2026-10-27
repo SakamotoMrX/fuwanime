@@ -42,52 +42,62 @@ back_gesture() { adb shell input swipe 2 1200 520 1200 250; }
 record() { adb shell screenrecord --bit-rate 6000000 --size 540x1200 --time-limit 60 "/sdcard/$1.mp4" & REC=$!; sleep 1; }
 stop_record() { sleep 1; kill -INT $REC 2>/dev/null; wait $REC 2>/dev/null; sleep 2; adb pull "/sdcard/$1.mp4" "$OUT/$1.mp4" >/dev/null && echo "recorded $1"; }
 
-adb shell am start -W -n "$PKG/com.fuwanime.MainActivity"
-sleep 15; alive
-adb shell input tap 540 1500; sleep 1   # dismiss anything modal
+# Every scenario starts from a fresh launch on Home, so one failed step never derails the next.
+fresh() { adb shell am force-stop "$PKG"; sleep 1; adb shell am start -W -n "$PKG/com.fuwanime.MainActivity" >/dev/null; sleep 12; alive; }
+open_search_result() {  # $1 = query, $2 = title prefix to tap
+  tap "Jelajah"; sleep 3; tap "Cari judul anime*" || adb shell input tap 540 330; sleep 1
+  adb shell input text "$1"; sleep 5; adb shell input keyevent KEYCODE_BACK; sleep 1
+  tap "$2"
+}
 
-# 1. Home row poster -> detail -> back (key back) -> Home must respond at once.
+# 1. Home row poster -> detail -> key back -> scroll Home right away (must respond).
+fresh
 scroll_to "Sedang Tayang"
 record qa1-home-detail-back
-tap "Sedang Tayang" 330 200; sleep 2.5; shot qa1a-detail 0
+tap "Sedang Tayang" 330 200; sleep 4; shot qa1a-detail 0
 adb shell input keyevent KEYCODE_BACK; sleep 0.3
-adb shell input swipe 540 1600 540 900 200; shot qa1b-home-after-back 0.4
+adb shell input swipe 540 1600 540 900 200; shot qa1b-home-after-back 0.5
 stop_record qa1-home-detail-back; alive
 
-# 2. Same with the back gesture (predictive back), then scroll Home immediately.
+# 2. Same with the edge back gesture.
+fresh
+scroll_to "Sedang Tayang"
 record qa2-gesture-back
-tap "Sedang Tayang" 330 200; sleep 2.5
+tap "Sedang Tayang" 330 200; sleep 4
 back_gesture; sleep 0.2; shot qa2a-after-gesture 0
-adb shell input swipe 540 1600 540 900 200; shot qa2b-home-scrolled 0.4
+adb shell input swipe 540 1600 540 900 200; shot qa2b-home-scrolled 0.5
 stop_record qa2-gesture-back; alive
 
-# 3. Detail -> Season & Terkait -> scroll the new detail right away -> back -> back.
-adb shell input swipe 540 900 540 1700 300; sleep 1
-scroll_to "Sedang Tayang"; tap "Sedang Tayang" 330 200; sleep 3
+# 3. Search -> detail with seasons -> Season & Terkait -> scroll the new page at once -> back -> back.
+fresh
+open_search_result kimetsu "Kimetsu no Yaiba*"; sleep 5; shot qa3a-first-detail 0
+scroll_to "Season & Terkait"
 record qa3-season
-scroll_to "Season & Terkait" && tap "Season & Terkait" 330 200 && sleep 0.3 && adb shell input swipe 540 1700 540 700 250
-shot qa3a-season-scrolled 1.5
-adb shell input keyevent KEYCODE_BACK; shot qa3b-back-to-first 1.5
-adb shell input keyevent KEYCODE_BACK; shot qa3c-home 1.5
+tap "Season & Terkait" 330 200; sleep 0.4; adb shell input swipe 540 1700 540 700 250
+shot qa3b-season-scrolled 2
+adb shell input keyevent KEYCODE_BACK; shot qa3c-back-to-first 2.5
+adb shell input keyevent KEYCODE_BACK; shot qa3d-explore 2.5
 stop_record qa3-season; alive
 
-# 4. Detail -> episode thumbnail -> player -> back; then "Tonton/Lanjutkan" -> player -> back -> back.
-tap "Tonton Sekarang"; sleep 3
+# 4. Detail -> episode row -> player -> back; "Tonton/Lanjutkan" -> player -> back (header must be intact) -> back.
+fresh
+tap "Tonton Sekarang"; sleep 5; shot qa4a-detail 0
 record qa4-player
-scroll_to "Episode 1" && tap "Episode 1"; shot qa4a-player 4
-adb shell input keyevent KEYCODE_BACK; shot qa4b-detail-after-player 1.5
-adb shell input swipe 540 900 540 1700 300; sleep 1
-tap "Tonton Ep*" || tap "Lanjutkan Ep*"; shot qa4c-player-from-button 4
-adb shell input keyevent KEYCODE_BACK; shot qa4d-detail-header 1.5
-adb shell input keyevent KEYCODE_BACK; shot qa4e-home 1.5
+scroll_to "Episode 1" && tap "Episode 1"; shot qa4b-player 6
+adb shell input keyevent KEYCODE_BACK; shot qa4c-detail-after-player 2.5
+adb shell input swipe 540 900 540 1700 300; adb shell input swipe 540 900 540 1700 300; sleep 1
+tap "Tonton Ep*" || tap "Lanjutkan Ep*"; shot qa4d-player-from-button 6
+adb shell input keyevent KEYCODE_BACK; shot qa4e-detail-header 2.5
+adb shell input keyevent KEYCODE_BACK; shot qa4f-home 2.5
 stop_record qa4-player; alive
 
 # 5. Tabs.
+fresh
 record qa5-tabs
-tap "Jelajah"; shot qa5a-explore 2
-tap "Jadwal"; shot qa5b-schedule 2
-tap "Koleksi"; shot qa5c-library 2
-tap "Beranda"; shot qa5d-home 2
+tap "Jelajah"; shot qa5a-explore 3
+tap "Jadwal"; shot qa5b-schedule 3
+tap "Koleksi"; shot qa5c-library 3
+tap "Beranda"; shot qa5d-home 3
 stop_record qa5-tabs; alive
 
 adb logcat -d -b crash | tail -40

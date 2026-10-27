@@ -54,7 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
-import com.fuwanime.ui.motion.rememberIsExiting
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExperimentalAnimationApi
 import com.fuwanime.ui.motion.passTouchesThrough
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.FuwaApp
@@ -123,18 +124,21 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() 
  * Exposes the destination's enter/exit scope to shared elements and entrance animations inside it, on an opaque
  * background so a page fading in covers the one beneath instead of mixing with it.
  */
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) {
     // Closing onto a tab is instant: no shared poster flying back and no exit fades inside the page (treated like
-    // "remove animations"), so nothing covers the tab while it shows.
-    val closingToTab = rememberIsExiting() && !LocalCurrentIsOverlay.current
+    // "remove animations"), so nothing covers the tab while it shows. Read from this destination's own transition:
+    // LocalNavScope is only provided below.
+    val exiting = transition.targetState == EnterExitState.PostExit
+    val closingToTab = exiting && !LocalCurrentIsOverlay.current
     CompositionLocalProvider(
         LocalNavScope provides this,
         LocalReduceMotion provides (LocalReduceMotion.current || closingToTab),
     ) {
         Box(
             Modifier
-                .passTouchesThrough(rememberIsExiting())
+                .passTouchesThrough(exiting)
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) { content() }
