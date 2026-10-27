@@ -38,9 +38,9 @@ object Motion {
     const val Medium = 350
     const val Long = 420
 
-    /** Page slide when opening/closing detail and player, and the fade-out that clears the old page first. */
+    /** Page slide when opening/closing detail and player, and how fast the top page covers/uncovers the one beneath. */
     const val Page = 300
-    const val FadeOut = 90
+    const val Cover = 150
 
     val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
