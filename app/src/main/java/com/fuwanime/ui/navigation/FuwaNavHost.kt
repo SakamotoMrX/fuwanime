@@ -49,6 +49,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.background
+import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.FuwaApp
 import com.fuwanime.data.Anime
 import com.fuwanime.ui.motion.LocalNavScope
@@ -71,7 +76,7 @@ private object Routes {
     const val SCHEDULE = "schedule"
     const val LIBRARY = "library"
     const val DETAIL = "detail/{animeId}?from={from}"
-    const val PLAYER = "player/{animeId}/{episodeId}?number={number}&thumb={thumb}&from={from}"
+    const val PLAYER = "player/{animeId}/{episodeId}?number={number}&thumb={thumb}&shared={shared}"
     const val SETTINGS = "settings"
 
     fun explore(genre: String? = null, focus: Boolean = false) =
@@ -81,10 +86,10 @@ private object Routes {
     fun detail(animeId: String, from: String? = null) =
         "detail/${Uri.encode(animeId)}?from=${Uri.encode(from.orEmpty())}"
 
-    /** [thumb] is shown in the video area until the first frame; [from] keys the shared thumbnail transition. */
-    fun player(animeId: String, episodeId: String, number: String, thumb: String = "", from: String? = null) =
+    /** [thumb] is shown in the video area until the first frame; [shared] is the key of the image that flies into it. */
+    fun player(animeId: String, episodeId: String, number: String, thumb: String = "", shared: String? = null) =
         "player/${Uri.encode(animeId)}/${Uri.encode(episodeId)}?number=${Uri.encode(number)}" +
-            "&thumb=${Uri.encode(thumb)}&from=${Uri.encode(from.orEmpty())}"
+            "&thumb=${Uri.encode(thumb)}&shared=${Uri.encode(shared.orEmpty())}"
 }
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
@@ -100,17 +105,25 @@ private fun NavBackStackEntry.isOverlay() = destination.route == Routes.DETAIL |
 private val FadeThroughIn = fadeIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate)) +
     scaleIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate), initialScale = 0.94f)
 private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAccelerate))
-private val OverlayIn = fadeIn(tween(Motion.Medium, easing = Motion.EmphasizedDecelerate))
-private val OverlayOut = fadeOut(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate))
+// Detail/player cover the page beneath quickly and fully (it stays put underneath), so two pages never show
+// through each other; their own content then rises in after the shared element (navEnter).
+private val OverlayIn = fadeIn(tween(Motion.Cover, easing = LinearEasing))
+private val OverlayOut = ExitTransition.KeepUntilTransitionsFinished
+private val OverlayPopEnter = EnterTransition.None
 private val OverlayPopOut = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() =
     initialState.isOverlay() || targetState.isOverlay()
 
-/** Exposes the destination's enter/exit scope to shared elements and entrance animations inside it. */
+/**
+ * Exposes the destination's enter/exit scope to shared elements and entrance animations inside it, on an opaque
+ * background so a page fading in covers the one beneath instead of mixing with it.
+ */
 @Composable
 private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) =
-    CompositionLocalProvider(LocalNavScope provides this, content = content)
+    CompositionLocalProvider(LocalNavScope provides this) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+    }
 
 private fun NavBackStackEntry.from(): String? = arguments?.getString("from")?.takeIf { it.isNotBlank() }
 
@@ -142,8 +155,8 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
         animeRepository.prime(anime)
         nav.navigate(Routes.detail(anime.id, from))
     }
-    val play: (String, Episode, String?) -> Unit = { animeId, ep, from ->
-        nav.navigate(Routes.player(animeId, ep.id, ep.number, ep.thumbnail, from))
+    val play: (String, Episode, String?, String) -> Unit = { animeId, ep, shared, thumb ->
+        nav.navigate(Routes.player(animeId, ep.id, ep.number, thumb, shared))
     }
     val reduceMotion = rememberReduceMotion()
     // Fresh Explore entry (no restoreState) so the new genre/focus arguments take effect.
@@ -187,7 +200,7 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                         // Tabs fade through; anything involving detail/player fades under its shared element.
                         enterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
                         exitTransition = { if (involvesOverlay()) OverlayOut else FadeThroughOut },
-                        popEnterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
+                        popEnterTransition = { if (involvesOverlay()) OverlayPopEnter else FadeThroughIn },
                         // Closing detail/player: its content clears quickly while the shared element flies back.
                         popExitTransition = { if (involvesOverlay()) OverlayPopOut else FadeThroughOut },
                     ) {
@@ -199,7 +212,8 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                         nav.navigate(
                                             Routes.player(
                                                 e.animeId, e.episodeId, e.episodeNumber,
-                                                e.episodeThumbnail.ifBlank { e.animeCover }, from = "home-cw",
+                                                e.episodeThumbnail.ifBlank { e.animeCover },
+                                                shared = sharedEpisodeKey(e.episodeId, "home-cw"),
                                             ),
                                         )
                                     },
@@ -230,7 +244,8 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                         nav.navigate(
                                             Routes.player(
                                                 e.animeId, e.episodeId, e.episodeNumber,
-                                                e.episodeThumbnail.ifBlank { e.animeCover }, from = "library",
+                                                e.episodeThumbnail.ifBlank { e.animeCover },
+                                                shared = sharedEpisodeKey(e.episodeId, "library"),
                                             ),
                                         )
                                     },
@@ -250,7 +265,7 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                     origin = entry.from(),
                                     entryKey = entry.id,
                                     onBack = { nav.popBackStack() },
-                                    onPlay = { anime, ep, from -> play(anime.id, ep, from) },
+                                    onPlay = { anime, ep, shared, thumb -> play(anime.id, ep, shared, thumb) },
                                     onAnimeClick = openAnime,
                                     onGenre = { g -> openExplore(g, false) },
                                 )
@@ -263,7 +278,7 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                 navArgument("episodeId") { type = NavType.StringType },
                                 navArgument("number") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("thumb") { type = NavType.StringType; defaultValue = "" },
-                                navArgument("from") { type = NavType.StringType; defaultValue = "" },
+                                navArgument("shared") { type = NavType.StringType; defaultValue = "" },
                             ),
                             // The video surface ignores alpha, so the player slides away instead of only fading.
                             popExitTransition = {
@@ -271,7 +286,12 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                     fadeOut(tween(Motion.Short))
                             },
                         ) { entry ->
-                            Scoped { PlayerRoute(origin = entry.from(), onBack = { nav.popBackStack() }) }
+                            Scoped {
+                                PlayerRoute(
+                                    sharedKey = entry.arguments?.getString("shared")?.takeIf { it.isNotBlank() },
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
                         }
                         composable(Routes.SETTINGS) { Scoped { SettingsRoute(onBack = { nav.popBackStack() }) } }
                     }

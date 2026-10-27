@@ -83,6 +83,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.mutableIntStateOf
+import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.staggerIn
 import com.fuwanime.ui.motion.sharedPosterKey
 import com.fuwanime.ui.motion.sharedKey
@@ -121,7 +122,8 @@ fun DetailRoute(
     /** Unique per back-stack entry, so rows on stacked detail pages never share keys. */
     entryKey: String,
     onBack: () -> Unit,
-    onPlay: (anime: Anime, episode: Episode, from: String?) -> Unit,
+    /** [sharedKey] names the image that flies into the player; [thumb] is what the player shows meanwhile. */
+    onPlay: (anime: Anime, episode: Episode, sharedKey: String?, thumb: String) -> Unit,
     onAnimeClick: OpenAnime,
     onGenre: (String) -> Unit,
 ) {
@@ -169,7 +171,7 @@ private fun DetailScreen(
     origin: String?,
     entryKey: String,
     onBack: () -> Unit,
-    onPlay: (Anime, Episode, String?) -> Unit,
+    onPlay: (Anime, Episode, String?, String) -> Unit,
     onAnimeClick: OpenAnime,
     onGenre: (String) -> Unit,
 ) {
@@ -183,7 +185,7 @@ private fun DetailScreen(
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
-            item(key = "header") { Header(anime, origin) }
+            item(key = "header") { Header(anime, origin, entryKey) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }
@@ -198,7 +200,12 @@ private fun DetailScreen(
                     val target: Episode? = resume?.let { Episode(it.episodeId, it.episodeNumber, it.episodeTitle, it.episodeThumbnail) }
                         ?: state.firstEpisode
                     Button(
-                        onClick = { if (anime != null && target != null) onPlay(anime, target, null) },
+                        // The header backdrop flies into the video area.
+                        onClick = {
+                            if (anime != null && target != null) {
+                                onPlay(anime, target, sharedBackdropKey(anime.id, entryKey), anime.backdrop)
+                            }
+                        },
                         enabled = anime != null && target != null,
                         contentPadding = PaddingValues(vertical = 14.dp),
                         modifier = Modifier.weight(1f),
@@ -334,7 +341,7 @@ private fun DetailScreen(
                         download = downloads[ep.id],
                         onDownload = { vm.download(ep) },
                         onDeleteDownload = { vm.deleteDownload(ep) },
-                        onClick = { anime?.let { onPlay(it, ep, "detail") } },
+                        onClick = { anime?.let { onPlay(it, ep, sharedEpisodeKey(ep.id, "detail"), ep.thumbnail) } },
                     )
                     }
                 }
@@ -349,13 +356,21 @@ private fun DetailScreen(
 }
 
 @Composable
-private fun Header(anime: Anime?, origin: String?) {
+private fun Header(anime: Anime?, origin: String?, entryKey: String) {
     val bg = MaterialTheme.colorScheme.background
     Box {
         if (anime == null) {
             SkeletonBox(Modifier.fillMaxWidth().height(280.dp), RoundedCornerShape(0.dp))
         } else {
-            NetImage(anime.backdrop, Modifier.navEnter(0, rise = false).fillMaxWidth().height(280.dp).fadeToBackground(bg))
+            NetImage(
+                anime.backdrop,
+                Modifier
+                    .navEnter(0, rise = false)
+                    .fillMaxWidth()
+                    .height(280.dp)
+                    .sharedKey(sharedBackdropKey(anime.id, entryKey))
+                    .fadeToBackground(bg),
+            )
         }
         Row(
             Modifier.padding(top = 190.dp, start = 20.dp, end = 20.dp),

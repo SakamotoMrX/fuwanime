@@ -33,7 +33,10 @@ import kotlinx.coroutines.delay
 object Motion {
     const val Short = 200
     const val Medium = 350
-    const val Long = 420
+    const val Long = 480
+
+    /** How fast a detail/player page covers the one beneath it; short so two pages never show through each other. */
+    const val Cover = 150
 
     val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
@@ -46,6 +49,9 @@ typealias OpenAnime = (anime: com.fuwanime.data.Anime, from: String) -> Unit
 /** Shared-element keys carry the row a title was opened from, so the same anime in two rows never clashes. */
 fun sharedPosterKey(animeId: String, origin: String) = "poster-$animeId-$origin"
 fun sharedEpisodeKey(episodeId: String, origin: String) = "episode-$episodeId-$origin"
+
+/** The detail header backdrop, which flies into the player when "Tonton"/"Lanjutkan" is pressed. */
+fun sharedBackdropKey(animeId: String, origin: String) = "backdrop-$animeId-$origin"
 
 private const val STAGGER_STEP_MS = 35
 private const val STAGGER_MAX_STEPS = 8

@@ -2,6 +2,7 @@ package com.fuwanime
 
 import com.fuwanime.ui.motion.StaggerState
 import com.fuwanime.ui.motion.isReduceMotion
+import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.sharedPosterKey
 import com.fuwanime.ui.motion.staggerDelay
@@ -18,6 +19,8 @@ class MotionTest {
         assertNotEquals(sharedPosterKey("123", "home-popular"), sharedPosterKey("123", "home-season"))
         assertEquals("episode-9-detail", sharedEpisodeKey("9", "detail"))
         assertNotEquals(sharedPosterKey("9", "detail"), sharedEpisodeKey("9", "detail"))
+        assertEquals("backdrop-9-e1", sharedBackdropKey("9", "e1"))
+        assertNotEquals(sharedBackdropKey("9", "e1"), sharedPosterKey("9", "e1"))
     }
 
     @Test
