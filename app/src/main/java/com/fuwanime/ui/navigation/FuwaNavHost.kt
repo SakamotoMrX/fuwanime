@@ -50,7 +50,6 @@ import androidx.navigation.navArgument
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import com.fuwanime.ui.motion.sharedEpisodeKey
@@ -108,7 +107,8 @@ private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAcceler
 // Detail/player cover the page beneath quickly and fully (it stays put underneath), so two pages never show
 // through each other; their own content then rises in after the shared element (navEnter).
 private val OverlayIn = fadeIn(tween(Motion.Cover, easing = LinearEasing))
-private val OverlayOut = ExitTransition.KeepUntilTransitionsFinished
+// Stays fully visible (alpha 1 -> 1) for as long as the shared element flies, then is dropped.
+private val OverlayOut = fadeOut(tween(Motion.Long), targetAlpha = 1f)
 private val OverlayPopEnter = EnterTransition.None
 private val OverlayPopOut = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate))
 
