@@ -14,6 +14,9 @@ adb shell settings put global transition_animation_scale 1
 adb shell settings put global animator_duration_scale 1
 adb shell cmd overlay enable com.android.internal.systemui.navbar.gestural || true
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
+# The slow emulator with animations on makes the launcher ANR; its dialog covers the app. Hide system error dialogs.
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put secure anr_show_background 0 || true
 adb logcat -c
 
 shot() { sleep "${2:-1}"; adb exec-out screencap -p > "$OUT/$1.png"; echo "captured $1"; }
@@ -43,7 +46,8 @@ record() { adb shell screenrecord --bit-rate 6000000 --size 540x1200 --time-limi
 stop_record() { sleep 1; kill -INT $REC 2>/dev/null; wait $REC 2>/dev/null; sleep 2; adb pull "/sdcard/$1.mp4" "$OUT/$1.mp4" >/dev/null && echo "recorded $1"; }
 
 # Every scenario starts from a fresh launch on Home, so one failed step never derails the next.
-fresh() { adb shell am force-stop "$PKG"; sleep 1; adb shell am start -W -n "$PKG/com.fuwanime.MainActivity" >/dev/null; sleep 12; alive; }
+dismiss_dialogs() { adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1; tap "Wait" >/dev/null 2>&1 || true; }
+fresh() { adb shell am force-stop "$PKG"; sleep 1; adb shell am start -W -n "$PKG/com.fuwanime.MainActivity" >/dev/null; sleep 12; dismiss_dialogs; alive; }
 open_search_result() {  # $1 = query, $2 = title prefix to tap
   tap "Jelajah"; sleep 3; tap "Cari judul anime*" || adb shell input tap 540 330; sleep 1
   adb shell input text "$1"; sleep 5; adb shell input keyevent KEYCODE_BACK; sleep 1
