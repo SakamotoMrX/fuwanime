@@ -64,6 +64,7 @@ import coil.request.ImageRequest
 import com.fuwanime.data.Anime
 import com.fuwanime.ui.motion.LocalReduceMotion
 import com.fuwanime.ui.motion.Motion
+import com.fuwanime.ui.motion.aboveSharedElements
 import com.fuwanime.ui.motion.pressScale
 import com.fuwanime.ui.motion.rememberStaggerState
 import com.fuwanime.ui.motion.sharedEpisodeKey
@@ -170,7 +171,8 @@ fun PosterCard(
                 .aspectRatio(2f / 3f)
                 .clip(MaterialTheme.shapes.medium),
         ) {
-            // Only the image is shared: badges and scrim stay on the card while the poster flies.
+            // Only the image is shared. Scrim and badges render above shared elements, so while a transition is
+            // active the image (drawn in the transition overlay) never covers them.
             NetImage(
                 anime.poster,
                 // Clip after the shared key so the flying copy keeps its rounded corners.
@@ -181,12 +183,14 @@ fun PosterCard(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .aboveSharedElements()
                     .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f))),
             )
             if (anime.isOngoing) {
                 Row(
                     Modifier
                         .align(Alignment.TopStart)
+                        .aboveSharedElements()
                         .padding(6.dp)
                         .clip(RoundedCornerShape(50))
                         .background(Color.Black.copy(alpha = 0.6f))
@@ -204,7 +208,7 @@ fun PosterCard(
                     meta,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).aboveSharedElements().padding(8.dp),
                 )
             }
         }
@@ -321,23 +325,23 @@ fun ContinueWatchingCard(
                 entry.episodeThumbnail.ifBlank { entry.animeCover },
                 Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }).clip(MaterialTheme.shapes.medium),
             )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            Box(Modifier.fillMaxSize().aboveSharedElements().background(Color.Black.copy(alpha = 0.25f)))
             Surface(
                 shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier.align(Alignment.Center).size(44.dp),
+                modifier = Modifier.align(Alignment.Center).aboveSharedElements().size(44.dp),
             ) {
                 Icon(Icons.Rounded.PlayArrow, "Lanjutkan", tint = Color.White, modifier = Modifier.padding(8.dp))
             }
             Pill(
                 "EP ${entry.episodeNumber}",
-                Modifier.align(Alignment.TopStart).padding(8.dp),
+                Modifier.align(Alignment.TopStart).aboveSharedElements().padding(8.dp),
                 container = MaterialTheme.colorScheme.primary,
                 content = MaterialTheme.colorScheme.onPrimary,
             )
             LinearProgressIndicator(
                 progress = { entry.progress },
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).aboveSharedElements().fillMaxWidth().height(3.dp),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = Color.White.copy(alpha = 0.25f),
                 drawStopIndicator = {},
