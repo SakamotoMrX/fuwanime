@@ -41,7 +41,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.fuwanime.ui.motion.sharedPosterKey
-import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.data.Anime
 import com.fuwanime.data.AnimeRepository
@@ -177,7 +176,7 @@ private fun ScheduleRow(anime: Anime, origin: String, onClick: () -> Unit) {
     ) {
         NetImage(
             anime.poster,
-            Modifier.width(76.dp).aspectRatio(2f / 3f).sharedKey(sharedPosterKey(anime.id, origin)).clip(MaterialTheme.shapes.small),
+            Modifier.width(76.dp).aspectRatio(2f / 3f).clip(MaterialTheme.shapes.small),
             anime.title,
         )
         Spacer(Modifier.width(14.dp))
