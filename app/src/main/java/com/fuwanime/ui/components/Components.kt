@@ -7,7 +7,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -57,6 +62,14 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.fuwanime.data.Anime
+import com.fuwanime.ui.motion.LocalReduceMotion
+import com.fuwanime.ui.motion.Motion
+import com.fuwanime.ui.motion.pressScale
+import com.fuwanime.ui.motion.rememberStaggerState
+import com.fuwanime.ui.motion.sharedEpisodeKey
+import com.fuwanime.ui.motion.sharedKey
+import com.fuwanime.ui.motion.sharedPosterKey
+import com.fuwanime.ui.motion.staggerIn
 import com.fuwanime.data.local.WatchHistoryEntity
 import com.fuwanime.util.statusLabel
 
@@ -72,7 +85,8 @@ fun NetImage(
     Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         if (url.isNotBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(context).data(url).crossfade(250).build(),
+                // Reuse whatever size of this image is already in memory, so shared elements never fly as a grey box.
+                model = ImageRequest.Builder(context).data(url).placeholderMemoryCacheKey(url).crossfade(250).build(),
                 contentDescription = contentDescription,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
@@ -81,7 +95,10 @@ fun NetImage(
     }
 }
 
-fun Modifier.shimmer(): Modifier = composed { background(shimmerBrush()) }
+fun Modifier.shimmer(): Modifier = composed {
+    // A static placeholder when the system has animations turned off.
+    if (LocalReduceMotion.current) background(MaterialTheme.colorScheme.surfaceContainerHigh) else background(shimmerBrush())
+}
 
 @Composable
 private fun shimmerBrush(): Brush {
@@ -137,11 +154,15 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     width: Dp? = null,
     caption: String? = null,
+    /** Row the card sits in; when set, its poster flies into the detail header. */
+    sharedOrigin: String? = null,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Column(
         (if (width != null) modifier.width(width) else modifier)
+            .pressScale(interaction)
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
     ) {
         Box(
             Modifier
@@ -149,7 +170,13 @@ fun PosterCard(
                 .aspectRatio(2f / 3f)
                 .clip(MaterialTheme.shapes.medium),
         ) {
-            NetImage(anime.poster, Modifier.fillMaxSize(), anime.title)
+            // Only the image is shared: badges and scrim stay on the card while the poster flies.
+            NetImage(
+                anime.poster,
+                // Clip after the shared key so the flying copy keeps its rounded corners.
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) }).clip(MaterialTheme.shapes.medium),
+                anime.title,
+            )
             // Bottom scrim keeps badges legible on bright posters.
             Box(
                 Modifier
@@ -246,26 +273,54 @@ fun PosterRow(
     loading: Boolean,
     onClick: (Anime) -> Unit,
     caption: (Anime) -> String? = { null },
+    /** Shared-poster origin for this row, e.g. "home-popular"; null disables the poster transition. */
+    origin: String? = null,
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (loading && items.isEmpty()) {
-            items(6) { PosterSkeleton(width = 124.dp) }
-        } else {
-            items(items, key = { it.id }) { anime ->
-                PosterCard(anime, onClick = { onClick(anime) }, width = 124.dp, caption = caption(anime))
+    val stagger = rememberStaggerState()
+    Crossfade(loading && items.isEmpty(), animationSpec = tween(Motion.Medium), label = "posterRow") { skeleton ->
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            userScrollEnabled = !skeleton,
+        ) {
+            if (skeleton) {
+                items(6) { PosterSkeleton(width = 124.dp) }
+            } else {
+                itemsIndexed(items, key = { _, a -> a.id }) { index, anime ->
+                    PosterCard(
+                        anime,
+                        onClick = { onClick(anime) },
+                        modifier = Modifier.staggerIn(stagger, anime.id, index),
+                        width = 124.dp,
+                        caption = caption(anime),
+                        sharedOrigin = origin,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ContinueWatchingCard(entry: WatchHistoryEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.width(240.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick)) {
+fun ContinueWatchingCard(
+    entry: WatchHistoryEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** When set, the thumbnail flies into the player's video area. */
+    sharedOrigin: String? = null,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Column(
+        modifier.width(240.dp)
+            .pressScale(interaction)
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
+    ) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)) {
-            NetImage(entry.episodeThumbnail.ifBlank { entry.animeCover }, Modifier.fillMaxSize())
+            NetImage(
+                entry.episodeThumbnail.ifBlank { entry.animeCover },
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }).clip(MaterialTheme.shapes.medium),
+            )
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
             Surface(
                 shape = CircleShape,
