@@ -83,7 +83,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.mutableIntStateOf
-import com.fuwanime.ui.motion.rememberIsExiting
 import com.fuwanime.ui.motion.rememberIsEntering
 import com.fuwanime.ui.motion.headerStillShown
 import com.fuwanime.ui.motion.sharedBackdropKey
@@ -195,9 +194,6 @@ private fun DetailScreen(
                 headerStillShown(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, HEADER_LINK_MAX_OFFSET_PX)
             }
         }
-        // The poster only flies in: while this page is leaving (back, swipe back still in progress, or covered by the
-        // next page) it is unlinked, so it never flies back over the page beneath.
-        val exiting = rememberIsExiting()
         val linkHeader = headerShown && !(entering && listState.isScrollInProgress)
         LazyColumn(
             state = listState,
@@ -205,7 +201,8 @@ private fun DetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             // Once the header is scrolled away, closing just fades instead of flying a poster in from off-screen.
-            item(key = "header") { Header(anime, origin.takeIf { linkHeader && !exiting }, entryKey, linkBackdrop = linkHeader) }
+            // The poster flies back on close too, as long as the header is still on screen.
+            item(key = "header") { Header(anime, origin.takeIf { linkHeader }, entryKey, linkBackdrop = linkHeader) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }

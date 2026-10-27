@@ -6,11 +6,11 @@ import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -51,7 +51,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import androidx.compose.animation.EnterExitState
@@ -109,13 +108,16 @@ private fun NavBackStackEntry.isOverlay() = destination.route == Routes.DETAIL |
 private val FadeThroughIn = fadeIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate)) +
     scaleIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate), initialScale = 0.94f)
 private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAccelerate))
-// Detail/player cover the page beneath quickly and fully (it stays put underneath), so two pages never show
-// through each other; their own content then rises in after the shared element (navEnter).
-private val OverlayIn = fadeIn(tween(Motion.Cover, easing = LinearEasing))
-// Stays fully visible (alpha 1 -> 1) for as long as the shared element flies, then is dropped.
-private val OverlayOut = fadeOut(tween(Motion.Long), targetAlpha = 1f)
-private val OverlayPopEnter = EnterTransition.None
-private val OverlayPopOut = fadeOut(tween(Motion.Short, easing = Motion.EmphasizedAccelerate))
+// Shared-axis X with fade-through timing: the old page fades out first (90 ms) and the new one fades in after it
+// while sliding ~10%, so two pages are never see-through at once. The poster/thumbnail flies above both.
+private val PageIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { it / 10 } +
+    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
+private val PageOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { -it / 10 } +
+    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
+private val PageBackIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { -it / 10 } +
+    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
+private val PageBackOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { it / 10 } +
+    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() =
     initialState.isOverlay() || targetState.isOverlay()
@@ -127,15 +129,10 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) {
-    // Closing onto a tab is instant: no shared poster flying back and no exit fades inside the page (treated like
-    // "remove animations"), so nothing covers the tab while it shows. Read from this destination's own transition:
-    // LocalNavScope is only provided below.
+    // A leaving page stays composed (its shared element may still be flying) but takes no touches, so the page
+    // beneath is usable at once. Read from this destination's own transition: LocalNavScope is provided below.
     val exiting = transition.targetState == EnterExitState.PostExit
-    val closingToTab = exiting && !LocalCurrentIsOverlay.current
-    CompositionLocalProvider(
-        LocalNavScope provides this,
-        LocalReduceMotion provides (LocalReduceMotion.current || closingToTab),
-    ) {
+    CompositionLocalProvider(LocalNavScope provides this) {
         Box(
             Modifier
                 .passTouchesThrough(exiting)
@@ -144,12 +141,6 @@ private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) {
         ) { content() }
     }
 }
-
-/** Whether the destination now on top of the back stack is detail/player (vs. a tab). */
-private val LocalCurrentIsOverlay = staticCompositionLocalOf { false }
-
-/** Gone in a single frame: closing onto a tab must not leave the old page covering it. */
-private val InstantOut = fadeOut(snap())
 
 private fun NavBackStackEntry.from(): String? = arguments?.getString("from")?.takeIf { it.isNotBlank() }
 
@@ -219,27 +210,15 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             SharedTransitionLayout {
-                CompositionLocalProvider(
-                    LocalSharedScope provides this,
-                    LocalReduceMotion provides reduceMotion,
-                    LocalCurrentIsOverlay provides (backStack?.isOverlay() == true),
-                ) {
+                CompositionLocalProvider(LocalSharedScope provides this, LocalReduceMotion provides reduceMotion) {
                     NavHost(
                         navController = nav,
                         startDestination = Routes.HOME,
-                        // Tabs fade through; anything involving detail/player fades under its shared element.
-                        enterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
-                        exitTransition = { if (involvesOverlay()) OverlayOut else FadeThroughOut },
-                        popEnterTransition = { if (involvesOverlay()) OverlayPopEnter else FadeThroughIn },
-                        // Back to a tab is instant (no fade, no poster flying back): any close transition there felt
-                        // like a lock. Closing onto another detail page still fades.
-                        popExitTransition = {
-                            when {
-                                !targetState.isOverlay() && initialState.isOverlay() -> InstantOut
-                                involvesOverlay() -> OverlayPopOut
-                                else -> FadeThroughOut
-                            }
-                        },
+                        // Tabs fade through; detail/player move along the X axis under their flying shared element.
+                        enterTransition = { if (involvesOverlay()) PageIn else FadeThroughIn },
+                        exitTransition = { if (involvesOverlay()) PageOut else FadeThroughOut },
+                        popEnterTransition = { if (involvesOverlay()) PageBackIn else FadeThroughIn },
+                        popExitTransition = { if (involvesOverlay()) PageBackOut else FadeThroughOut },
                     ) {
                         composable(Routes.HOME) {
                             Scoped {
@@ -317,15 +296,6 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                                 navArgument("thumb") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("shared") { type = NavType.StringType; defaultValue = "" },
                             ),
-                            // The video surface ignores alpha, so the player slides away instead of only fading.
-                            popExitTransition = {
-                                if (!targetState.isOverlay()) {
-                                    InstantOut
-                                } else {
-                                    slideOutVertically(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)) { it / 4 } +
-                                        fadeOut(tween(Motion.Short))
-                                }
-                            },
                         ) { entry ->
                             Scoped {
                                 PlayerRoute(
