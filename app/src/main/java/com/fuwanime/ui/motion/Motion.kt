@@ -158,6 +158,16 @@ fun Modifier.passTouchesThrough(enabled: Boolean): Modifier = if (!enabled) this
     layout(0, 0) { placeable.place(0, 0) }
 }
 
+/**
+ * Draws this element above any shared element in flight (e.g. a title next to the landing poster), so the poster
+ * passes behind the text instead of covering it. No-op outside the shared transition scope.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+fun Modifier.aboveSharedElements(): Modifier = composed {
+    val shared = LocalSharedScope.current ?: return@composed Modifier
+    with(shared) { Modifier.renderInSharedTransitionScopeOverlay(zIndexInOverlay = 1f) }
+}
+
 /** Destination content that fades (and with [rise], rises) into place after a shared element starts flying. */
 fun Modifier.navEnter(delayMs: Int = 120, rise: Boolean = true): Modifier = composed {
     val nav = LocalNavScope.current

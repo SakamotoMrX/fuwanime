@@ -92,6 +92,7 @@ import com.fuwanime.ui.motion.sharedPosterKey
 import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.rememberStaggerState
+import com.fuwanime.ui.motion.aboveSharedElements
 import com.fuwanime.ui.motion.navEnter
 import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.ui.motion.Motion
@@ -413,7 +414,8 @@ private fun Header(anime: Anime?, origin: String?, entryKey: String, linkBackdro
                 )
             }
             Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f).offset(y = (-4).dp).navEnter()) {
+            // Above the flying poster: it slides in behind the pills and title.
+            Column(Modifier.weight(1f).offset(y = (-4).dp).aboveSharedElements().navEnter()) {
                 if (anime == null) {
                     SkeletonBox(Modifier.fillMaxWidth().height(24.dp))
                     Spacer(Modifier.height(8.dp))
