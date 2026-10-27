@@ -61,8 +61,9 @@ fresh
 scroll_row "Sedang Tayang"
 record qa1-home-detail-back
 tap "Sedang Tayang" 330 200; sleep 4; shot qa1a-detail 0
-adb shell input keyevent KEYCODE_BACK; sleep 0.3
-adb shell input swipe 540 1600 540 900 200; shot qa1b-home-after-back 0.5
+adb shell input keyevent KEYCODE_BACK; shot qa1b-poster-flying-back 0.1
+# Scroll Home while the poster is still flying back: it must respond (no lock).
+adb shell input swipe 540 1600 540 900 200; shot qa1c-home-scrolled-during-flight 0.5
 stop_record qa1-home-detail-back; alive
 
 # 2. Same with the edge back gesture.

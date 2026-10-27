@@ -67,6 +67,7 @@ import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.pressScale
 import com.fuwanime.ui.motion.rememberStaggerState
 import com.fuwanime.ui.motion.sharedEpisodeKey
+import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.sharedPosterKey
 import com.fuwanime.ui.motion.staggerIn
 import com.fuwanime.data.local.WatchHistoryEntity
@@ -173,7 +174,7 @@ fun PosterCard(
             NetImage(
                 anime.poster,
                 // Clip after the shared key so the flying copy keeps its rounded corners.
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium),
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) }).clip(MaterialTheme.shapes.medium),
                 anime.title,
             )
             // Bottom scrim keeps badges legible on bright posters.
@@ -318,7 +319,7 @@ fun ContinueWatchingCard(
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)) {
             NetImage(
                 entry.episodeThumbnail.ifBlank { entry.animeCover },
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium),
+                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }).clip(MaterialTheme.shapes.medium),
             )
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
             Surface(

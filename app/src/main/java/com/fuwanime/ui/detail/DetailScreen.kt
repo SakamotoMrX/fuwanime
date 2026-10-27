@@ -83,8 +83,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.mutableIntStateOf
+import com.fuwanime.ui.motion.rememberIsEntering
+import com.fuwanime.ui.motion.headerStillShown
+import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.staggerIn
+import com.fuwanime.ui.motion.sharedPosterKey
+import com.fuwanime.ui.motion.sharedKey
+import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.rememberStaggerState
+import com.fuwanime.ui.motion.navEnter
 import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.LocalReduceMotion
@@ -179,12 +186,23 @@ private fun DetailScreen(
     val resume = remember(progress) { progress.values.maxByOrNull { it.updatedAt } }
 
     Box(Modifier.fillMaxSize()) {
+        // Scrolling while the poster flies used to make it chase the header. Instead of locking the list, the link
+        // is dropped the moment the user scrolls mid-transition: the poster settles into the header and scrolls with it.
+        val entering = rememberIsEntering()
+        val headerShown by remember {
+            derivedStateOf {
+                headerStillShown(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, HEADER_LINK_MAX_OFFSET_PX)
+            }
+        }
+        val linkHeader = headerShown && !(entering && listState.isScrollInProgress)
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 32.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "header") { Header(anime) }
+            // Once the header is scrolled away, closing just fades instead of flying a poster in from off-screen.
+            // The poster flies back on close too, as long as the header is still on screen.
+            item(key = "header") { Header(anime, origin.takeIf { linkHeader }, entryKey, linkBackdrop = linkHeader) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }
@@ -193,15 +211,16 @@ private fun DetailScreen(
 
             item(key = "actions") {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                    Modifier.navEnter().fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val target: Episode? = resume?.let { Episode(it.episodeId, it.episodeNumber, it.episodeTitle, it.episodeThumbnail) }
                         ?: state.firstEpisode
                     Button(
+                        // The header backdrop flies into the video area.
                         onClick = {
                             if (anime != null && target != null) {
-                                onPlay(anime, target, null, anime.backdrop)
+                                onPlay(anime, target, sharedBackdropKey(anime.id, entryKey), anime.backdrop)
                             }
                         },
                         enabled = anime != null && target != null,
@@ -240,7 +259,7 @@ private fun DetailScreen(
             if (anime != null) {
                 if (resume != null) {
                     item(key = "resumeBar") {
-                        Column(Modifier.padding(horizontal = 20.dp)) {
+                        Column(Modifier.navEnter(140).padding(horizontal = 20.dp)) {
                             LinearProgressIndicator(
                                 progress = { resume.progress },
                                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
@@ -252,13 +271,13 @@ private fun DetailScreen(
                 }
                 if (anime.genres.isNotEmpty()) {
                     item(key = "genres") {
-                        FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(Modifier.navEnter(160).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             anime.genres.forEach { g -> AssistChip(onClick = { onGenre(g) }, label = { Text(g) }) }
                         }
                     }
                 }
-                item(key = "synopsis") { Synopsis(anime.synopsis) }
-                item(key = "info") { InfoGrid(anime) }
+                item(key = "synopsis") { Box(Modifier.navEnter(180)) { Synopsis(anime.synopsis) } }
+                item(key = "info") { Box(Modifier.navEnter(200)) { InfoGrid(anime) } }
                 if (state.seasons.isNotEmpty()) {
                     item(key = "seasons") {
                         Column(Modifier.padding(top = 24.dp)) {
@@ -292,7 +311,7 @@ private fun DetailScreen(
             }
 
             item(key = "epHeader") {
-                EpisodeHeader(state, vm)
+                Box(Modifier.navEnter(220)) { EpisodeHeader(state, vm) }
             }
 
             if (state.ranges.size > 1 && state.episodeQuery.isBlank()) {
@@ -339,7 +358,7 @@ private fun DetailScreen(
                         download = downloads[ep.id],
                         onDownload = { vm.download(ep) },
                         onDeleteDownload = { vm.deleteDownload(ep) },
-                        onClick = { anime?.let { onPlay(it, ep, null, ep.thumbnail) } },
+                        onClick = { anime?.let { onPlay(it, ep, sharedEpisodeKey(ep.id, "detail"), ep.thumbnail) } },
                     )
                     }
                 }
@@ -353,8 +372,11 @@ private fun DetailScreen(
     }
 }
 
+/** Header scroll offset beyond which the poster no longer flies back on close. */
+private const val HEADER_LINK_MAX_OFFSET_PX = 600
+
 @Composable
-private fun Header(anime: Anime?) {
+private fun Header(anime: Anime?, origin: String?, entryKey: String, linkBackdrop: Boolean) {
     val bg = MaterialTheme.colorScheme.background
     Box {
         if (anime == null) {
@@ -363,10 +385,10 @@ private fun Header(anime: Anime?) {
             NetImage(
                 anime.backdrop,
                 Modifier
-                    
+                    .navEnter(0, rise = false)
                     .fillMaxWidth()
                     .height(280.dp)
-                    
+                    .sharedKey(sharedBackdropKey(anime.id, entryKey).takeIf { linkBackdrop })
                     .fadeToBackground(bg),
             )
         }
@@ -382,14 +404,14 @@ private fun Header(anime: Anime?) {
                     Modifier
                         .width(116.dp)
                         .aspectRatio(2f / 3f)
-                        
+                        .sharedKey(origin?.let { sharedPosterKey(anime.id, it) })
                         .shadow(16.dp, MaterialTheme.shapes.medium)
                         .clip(MaterialTheme.shapes.medium),
                     anime.title,
                 )
             }
             Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f).offset(y = (-4).dp)) {
+            Column(Modifier.weight(1f).offset(y = (-4).dp).navEnter()) {
                 if (anime == null) {
                     SkeletonBox(Modifier.fillMaxWidth().height(24.dp))
                     Spacer(Modifier.height(8.dp))
@@ -558,7 +580,7 @@ private fun EpisodeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(132.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)) {
-            NetImage(ep.thumbnail, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
+            NetImage(ep.thumbnail, Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(ep.id, "detail")).clip(MaterialTheme.shapes.small))
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.15f)))
             Icon(
                 Icons.Rounded.PlayArrow,

@@ -3,14 +3,16 @@ package com.fuwanime.ui.navigation
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -59,6 +61,7 @@ import com.fuwanime.FuwaApp
 import com.fuwanime.data.Anime
 import com.fuwanime.ui.motion.LocalNavScope
 import com.fuwanime.ui.motion.LocalReduceMotion
+import com.fuwanime.ui.motion.LocalSharedScope
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.rememberReduceMotion
 import com.fuwanime.data.Episode
@@ -99,33 +102,35 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
     LIBRARY(Routes.LIBRARY, "Koleksi", Icons.Outlined.VideoLibrary, Icons.Rounded.VideoLibrary),
 }
 
-/** Detail and player sit on top of the tabs; moving to or from them slides along the X axis. */
+/** Detail and player sit on top of the tabs; moving to or from them is a fade under a shared element. */
 private fun NavBackStackEntry.isOverlay() = destination.route == Routes.DETAIL || destination.route == Routes.PLAYER
 
 private val FadeThroughIn = fadeIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate)) +
     scaleIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate), initialScale = 0.94f)
 private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAccelerate))
-// Material shared-axis X: the new page slides in a little from the right while fading, the old one drifts left and
-// fades; going back mirrors it. Short and light, with nothing flying between pages.
-private val ForwardIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { it / 10 } +
-    fadeIn(tween(Motion.Page, easing = LinearEasing))
-private val ForwardOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { -it / 10 } +
-    fadeOut(tween(Motion.PageExit, easing = LinearEasing))
-private val BackIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { -it / 10 } +
-    fadeIn(tween(Motion.Page, easing = LinearEasing))
-private val BackOut = slideOutHorizontally(tween(Motion.PageExit, easing = Motion.EmphasizedAccelerate)) { it / 10 } +
-    fadeOut(tween(Motion.PageExit, easing = LinearEasing))
+// Shared-axis X with fade-through timing: the old page fades out first (90 ms) and the new one fades in after it
+// while sliding ~10%, so two pages are never see-through at once. The poster/thumbnail flies above both.
+private val PageIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { it / 10 } +
+    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
+private val PageOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { -it / 10 } +
+    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
+private val PageBackIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { -it / 10 } +
+    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
+private val PageBackOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { it / 10 } +
+    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() =
     initialState.isOverlay() || targetState.isOverlay()
 
 /**
- * Exposes the destination's enter/exit scope to entrance animations inside it, on an opaque background so pages
- * never show through each other. A leaving page no longer takes touches, so the page beneath is usable at once.
+ * Exposes the destination's enter/exit scope to shared elements and entrance animations inside it, on an opaque
+ * background so a page fading in covers the one beneath instead of mixing with it.
  */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) {
+    // A leaving page stays composed (its shared element may still be flying) but takes no touches, so the page
+    // beneath is usable at once. Read from this destination's own transition: LocalNavScope is provided below.
     val exiting = transition.targetState == EnterExitState.PostExit
     CompositionLocalProvider(LocalNavScope provides this) {
         Box(
@@ -145,6 +150,7 @@ private fun NavHostController.navigateTab(route: String) = navigate(route) {
     restoreState = true
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Unit = {}) {
     val nav = rememberNavController()
@@ -203,16 +209,16 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-            run {
-                CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
+            SharedTransitionLayout {
+                CompositionLocalProvider(LocalSharedScope provides this, LocalReduceMotion provides reduceMotion) {
                     NavHost(
                         navController = nav,
                         startDestination = Routes.HOME,
-                        // Tabs fade through; opening/closing detail and player slides along the X axis.
-                        enterTransition = { if (involvesOverlay()) ForwardIn else FadeThroughIn },
-                        exitTransition = { if (involvesOverlay()) ForwardOut else FadeThroughOut },
-                        popEnterTransition = { if (involvesOverlay()) BackIn else FadeThroughIn },
-                        popExitTransition = { if (involvesOverlay()) BackOut else FadeThroughOut },
+                        // Tabs fade through; detail/player move along the X axis under their flying shared element.
+                        enterTransition = { if (involvesOverlay()) PageIn else FadeThroughIn },
+                        exitTransition = { if (involvesOverlay()) PageOut else FadeThroughOut },
+                        popEnterTransition = { if (involvesOverlay()) PageBackIn else FadeThroughIn },
+                        popExitTransition = { if (involvesOverlay()) PageBackOut else FadeThroughOut },
                     ) {
                         composable(Routes.HOME) {
                             Scoped {
