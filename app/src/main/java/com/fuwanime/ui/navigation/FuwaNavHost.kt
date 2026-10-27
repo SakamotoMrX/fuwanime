@@ -50,6 +50,7 @@ import androidx.navigation.navArgument
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import com.fuwanime.ui.motion.rememberIsExiting
@@ -208,8 +209,15 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                         enterTransition = { if (involvesOverlay()) OverlayIn else FadeThroughIn },
                         exitTransition = { if (involvesOverlay()) OverlayOut else FadeThroughOut },
                         popEnterTransition = { if (involvesOverlay()) OverlayPopEnter else FadeThroughIn },
-                        // Closing detail/player: its content clears quickly while the shared element flies back.
-                        popExitTransition = { if (involvesOverlay()) OverlayPopOut else FadeThroughOut },
+                        // Back to a tab is instant (no fade, no poster flying back): any close transition there felt
+                        // like a lock. Closing onto another detail page still fades.
+                        popExitTransition = {
+                            when {
+                                !targetState.isOverlay() && initialState.isOverlay() -> ExitTransition.None
+                                involvesOverlay() -> OverlayPopOut
+                                else -> FadeThroughOut
+                            }
+                        },
                     ) {
                         composable(Routes.HOME) {
                             Scoped {
@@ -289,8 +297,12 @@ fun FuwaNavHost(initialAnimeId: String? = null, onInitialAnimeConsumed: () -> Un
                             ),
                             // The video surface ignores alpha, so the player slides away instead of only fading.
                             popExitTransition = {
-                                slideOutVertically(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)) { it / 4 } +
-                                    fadeOut(tween(Motion.Short))
+                                if (!targetState.isOverlay()) {
+                                    ExitTransition.None
+                                } else {
+                                    slideOutVertically(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)) { it / 4 } +
+                                        fadeOut(tween(Motion.Short))
+                                }
                             },
                         ) { entry ->
                             Scoped {
