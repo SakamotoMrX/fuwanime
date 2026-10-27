@@ -79,7 +79,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.sharedPosterKey
-import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.pressScale
 import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.data.Anime
@@ -454,7 +453,7 @@ private fun HeroPager(items: List<Anime>, onOpen: (Anime) -> Unit) {
                             .width(176.dp)
                             .aspectRatio(2f / 3f)
                             .pressScale(press)
-                            .sharedKey(sharedPosterKey(anime.id, "home-hero"))
+                            
                             .shadow(24.dp, MaterialTheme.shapes.large)
                             .clip(MaterialTheme.shapes.large)
                             .clickable(interactionSource = press, indication = LocalIndication.current) { onOpen(anime) },

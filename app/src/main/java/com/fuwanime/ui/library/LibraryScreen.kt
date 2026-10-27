@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.ui.motion.OpenAnime
 import com.fuwanime.data.Anime
@@ -178,7 +177,7 @@ private fun HistoryList(
                 Box(Modifier.width(140.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)) {
                     NetImage(
                         entry.episodeThumbnail.ifBlank { entry.animeCover },
-                        Modifier.fillMaxSize().sharedKey(sharedEpisodeKey(entry.episodeId, "library")).clip(MaterialTheme.shapes.small),
+                        Modifier.fillMaxSize().clip(MaterialTheme.shapes.small),
                     )
                     LinearProgressIndicator(
                         progress = { entry.progress },
