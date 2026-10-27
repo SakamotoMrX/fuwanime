@@ -108,16 +108,15 @@ private fun NavBackStackEntry.isOverlay() = destination.route == Routes.DETAIL |
 private val FadeThroughIn = fadeIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate)) +
     scaleIn(tween(Motion.Medium, 90, Motion.EmphasizedDecelerate), initialScale = 0.94f)
 private val FadeThroughOut = fadeOut(tween(90, easing = Motion.EmphasizedAccelerate))
-// Shared-axis X with fade-through timing: the old page fades out first (90 ms) and the new one fades in after it
-// while sliding ~10%, so two pages are never see-through at once. The poster/thumbnail flies above both.
+// The page underneath is always fully visible, so the flying poster never floats over an empty screen (the old
+// fade-through left ~100 ms of blank). Opening: the new page slides in ~10% and covers it in 150 ms. Closing: the
+// page beneath is there at once (slides back, no fade) while the top page slides off and fades in 150 ms.
 private val PageIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { it / 10 } +
-    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
-private val PageOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { -it / 10 } +
-    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
-private val PageBackIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { -it / 10 } +
-    fadeIn(tween(Motion.Page - Motion.FadeOut, delayMillis = Motion.FadeOut, easing = LinearEasing))
+    fadeIn(tween(Motion.Cover, easing = LinearEasing))
+private val PageOut = fadeOut(tween(Motion.Long), targetAlpha = 1f) // stays put and visible until the poster lands
+private val PageBackIn = slideInHorizontally(tween(Motion.Page, easing = Motion.EmphasizedDecelerate)) { -it / 10 }
 private val PageBackOut = slideOutHorizontally(tween(Motion.Page, easing = Motion.EmphasizedAccelerate)) { it / 10 } +
-    fadeOut(tween(Motion.FadeOut, easing = LinearEasing))
+    fadeOut(tween(Motion.Cover, easing = LinearEasing))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() =
     initialState.isOverlay() || targetState.isOverlay()
