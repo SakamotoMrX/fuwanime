@@ -128,6 +128,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.compose.animation.core.tween
+import com.fuwanime.ui.motion.rememberIsExiting
+import com.fuwanime.ui.motion.rememberIsEntering
 import com.fuwanime.ui.motion.LocalNavScope
 import com.fuwanime.ui.motion.sharedKey
 import com.fuwanime.ui.motion.Motion
@@ -605,15 +607,18 @@ private fun VideoSurface(
         )
 
         // Thumbnail until the first frame: the landing spot for the shared thumbnail, then a soft reveal.
-        // Held while the open transition runs, so a fast first frame never cuts the flying thumbnail short.
+        // Held while the open transition runs, so a fast first frame never cuts the flying thumbnail short. Only on
+        // open: appearing mid-way through the close transition left the detail backdrop stuck above its header.
+        val entering = rememberIsEntering()
+        val exiting = rememberIsExiting()
         AnimatedVisibility(
-            visible = (!playback.firstFrame || navTransitionRunning) && !state.offline && placeholderUrl.isNotBlank(),
+            visible = (!playback.firstFrame || entering) && !state.offline && placeholderUrl.isNotBlank(),
             enter = fadeIn(tween(Motion.Short)),
             exit = fadeOut(tween(Motion.Medium, easing = Motion.EmphasizedAccelerate)),
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(Modifier.fillMaxSize()) {
-                NetImage(placeholderUrl, Modifier.fillMaxSize().sharedKey(thumbnailKey))
+                NetImage(placeholderUrl, Modifier.fillMaxSize().sharedKey(thumbnailKey.takeIf { !exiting }))
                 // Keeps the white loading text legible on bright thumbnails.
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
             }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.ui.layout.layout
 import kotlinx.coroutines.delay
 
 /** Motion tokens: between snappy and cinematic, on Material 3's emphasized curves. */
@@ -139,6 +140,21 @@ fun Modifier.sharedKey(key: String?): Modifier = composed {
 fun rememberIsEntering(): Boolean {
     val transition = LocalNavScope.current?.transition ?: return false
     return transition.isRunning && transition.targetState == EnterExitState.Visible
+}
+
+/** True while this destination is leaving (closing, or being covered by the next page). */
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun rememberIsExiting(): Boolean = LocalNavScope.current?.transition?.targetState == EnterExitState.PostExit
+
+/**
+ * Lets touches fall through to the page beneath while this one is leaving: it still draws (and its shared elements
+ * still fly), but it reports no size, so hit testing skips it. Without this the fading page swallowed every tap
+ * until its poster landed.
+ */
+fun Modifier.passTouchesThrough(enabled: Boolean): Modifier = if (!enabled) this else layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(0, 0) { placeable.place(0, 0) }
 }
 
 /** Destination content that fades (and with [rise], rises) into place after a shared element starts flying. */

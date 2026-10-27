@@ -52,6 +52,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
+import com.fuwanime.ui.motion.rememberIsExiting
+import com.fuwanime.ui.motion.passTouchesThrough
 import com.fuwanime.ui.motion.sharedEpisodeKey
 import com.fuwanime.FuwaApp
 import com.fuwanime.data.Anime
@@ -122,7 +124,12 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesOverlay() 
 @Composable
 private fun AnimatedContentScope.Scoped(content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalNavScope provides this) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+        Box(
+            Modifier
+                .passTouchesThrough(rememberIsExiting())
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) { content() }
     }
 
 private fun NavBackStackEntry.from(): String? = arguments?.getString("from")?.takeIf { it.isNotBlank() }
