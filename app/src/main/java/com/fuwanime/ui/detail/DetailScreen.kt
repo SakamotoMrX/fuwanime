@@ -83,6 +83,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.mutableIntStateOf
+import com.fuwanime.ui.motion.rememberIsEntering
+import com.fuwanime.ui.motion.headerStillShown
 import com.fuwanime.ui.motion.sharedBackdropKey
 import com.fuwanime.ui.motion.staggerIn
 import com.fuwanime.ui.motion.sharedPosterKey
@@ -184,8 +186,21 @@ private fun DetailScreen(
     val resume = remember(progress) { progress.values.maxByOrNull { it.updatedAt } }
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
-            item(key = "header") { Header(anime, origin, entryKey) }
+        // Scrolling while the poster flies made it chase the header; hold the list for the short enter transition.
+        val entering = rememberIsEntering()
+        val headerShown by remember {
+            derivedStateOf {
+                headerStillShown(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, HEADER_LINK_MAX_OFFSET_PX)
+            }
+        }
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(bottom = 32.dp),
+            userScrollEnabled = !entering,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // Once the header is scrolled away, closing just fades instead of flying a poster in from off-screen.
+            item(key = "header") { Header(anime, origin.takeIf { headerShown }, entryKey, linkBackdrop = headerShown) }
 
             if (anime == null && state.infoError != null) {
                 item { ErrorState(state.infoError, vm::loadInfo) }
@@ -355,8 +370,11 @@ private fun DetailScreen(
     }
 }
 
+/** Header scroll offset beyond which the poster no longer flies back on close. */
+private const val HEADER_LINK_MAX_OFFSET_PX = 600
+
 @Composable
-private fun Header(anime: Anime?, origin: String?, entryKey: String) {
+private fun Header(anime: Anime?, origin: String?, entryKey: String, linkBackdrop: Boolean) {
     val bg = MaterialTheme.colorScheme.background
     Box {
         if (anime == null) {
@@ -368,7 +386,7 @@ private fun Header(anime: Anime?, origin: String?, entryKey: String) {
                     .navEnter(0, rise = false)
                     .fillMaxWidth()
                     .height(280.dp)
-                    .sharedKey(sharedBackdropKey(anime.id, entryKey))
+                    .sharedKey(sharedBackdropKey(anime.id, entryKey).takeIf { linkBackdrop })
                     .fadeToBackground(bg),
             )
         }

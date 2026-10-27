@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExperimentalAnimationApi
 import kotlinx.coroutines.delay
 
 /** Motion tokens: between snappy and cinematic, on Material 3's emphasized curves. */
@@ -61,6 +63,13 @@ private const val STAGGER_ITEMS = 12
 private const val STAGGER_WINDOW_MS = 600L
 
 fun staggerDelay(index: Int): Int = index.coerceIn(0, STAGGER_MAX_STEPS) * STAGGER_STEP_MS
+
+/**
+ * Whether a list's header is still on screen. A shared element only links to it then: flying to or from a header
+ * scrolled off the top looks like the image chasing the list.
+ */
+fun headerStillShown(firstVisibleIndex: Int, firstVisibleOffsetPx: Int, maxOffsetPx: Int): Boolean =
+    firstVisibleIndex == 0 && firstVisibleOffsetPx < maxOffsetPx
 
 /** The system "remove animations" setting sets the animator scale to 0. */
 fun isReduceMotion(animatorScale: Float): Boolean = animatorScale == 0f
@@ -122,6 +131,17 @@ fun Modifier.sharedKey(key: String?): Modifier = composed {
     with(shared) {
         Modifier.sharedElement(rememberSharedContentState(key), nav, boundsTransform = SharedBounds)
     }
+}
+
+/**
+ * True while this destination is animating in. Lists hold their scroll meanwhile, so a shared element lands on a
+ * target that is not moving.
+ */
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun rememberIsEntering(): Boolean {
+    val transition = LocalNavScope.current?.transition ?: return false
+    return transition.isRunning && transition.targetState == EnterExitState.Visible
 }
 
 /** Destination content that fades (and with [rise], rises) into place after a shared element starts flying. */
