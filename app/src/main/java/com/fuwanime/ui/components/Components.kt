@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -150,6 +151,7 @@ fun LiveDot(modifier: Modifier = Modifier) {
     Box(modifier.size(6.dp).clip(CircleShape).background(Color(0xFF4ADE80)))
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PosterCard(
     anime: Anime,
@@ -310,6 +312,7 @@ fun PosterRow(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ContinueWatchingCard(
     entry: WatchHistoryEntity,
