@@ -8,6 +8,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -126,12 +129,45 @@ private val SharedBounds = BoundsTransform { _, _ -> tween(Motion.Long, easing =
  * navigation scopes (previews, PiP) or when animations are off.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
-fun Modifier.sharedKey(key: String?): Modifier = composed {
+fun Modifier.sharedKey(key: String?): Modifier = composed { Modifier.sharedKey(rememberSharedKey(key)) }
+
+/** [sharedKey] with a state the caller keeps, so other parts of the card can tell when this element is flying. */
+@OptIn(ExperimentalSharedTransitionApi::class)
+fun Modifier.sharedKey(state: SharedTransitionScope.SharedContentState?): Modifier = composed {
     val shared = LocalSharedScope.current
     val nav = LocalNavScope.current
-    if (key == null || shared == null || nav == null || LocalReduceMotion.current) return@composed Modifier
-    with(shared) {
-        Modifier.sharedElement(rememberSharedContentState(key), nav, boundsTransform = SharedBounds)
+    if (state == null || shared == null || nav == null) return@composed Modifier
+    with(shared) { Modifier.sharedElement(state, nav, boundsTransform = SharedBounds) }
+}
+
+/** The shared state for [key], or null wherever [sharedKey] would be a no-op. */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun rememberSharedKey(key: String?): SharedTransitionScope.SharedContentState? {
+    val shared = LocalSharedScope.current
+    if (key == null || shared == null || LocalNavScope.current == null || LocalReduceMotion.current) return null
+    return with(shared) { rememberSharedContentState(key) }
+}
+
+/**
+ * Hides card labels while their own poster ([state]) is flying, then fades them in out of a blur once it lands, so
+ * "Tayang"/type labels never sit on an empty slot ahead of the poster.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+fun Modifier.revealWhenLanded(state: SharedTransitionScope.SharedContentState?): Modifier = composed {
+    val shared = LocalSharedScope.current
+    if (state == null || shared == null) return@composed Modifier
+    val flying = shared.isTransitionActive && state.isMatchFound
+    val shown = animateFloatAsState(
+        if (flying) 0f else 1f,
+        if (flying) snap() else tween(Motion.Cover, easing = Motion.EmphasizedDecelerate),
+        label = "revealWhenLanded",
+    )
+    Modifier.graphicsLayer {
+        alpha = shown.value
+        val radius = (1f - shown.value) * 6.dp.toPx()
+        // Blur only shows on API 31+; older devices get the plain fade.
+        renderEffect = if (radius > 0f) BlurEffect(radius, radius, TileMode.Decal) else null
     }
 }
 

@@ -65,6 +65,8 @@ import com.fuwanime.data.Anime
 import com.fuwanime.ui.motion.LocalReduceMotion
 import com.fuwanime.ui.motion.Motion
 import com.fuwanime.ui.motion.aboveSharedElements
+import com.fuwanime.ui.motion.rememberSharedKey
+import com.fuwanime.ui.motion.revealWhenLanded
 import com.fuwanime.ui.motion.pressScale
 import com.fuwanime.ui.motion.rememberStaggerState
 import com.fuwanime.ui.motion.sharedEpisodeKey
@@ -165,6 +167,7 @@ fun PosterCard(
             .clip(MaterialTheme.shapes.medium)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
     ) {
+        val poster = rememberSharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) })
         Box(
             Modifier
                 .fillMaxWidth()
@@ -176,7 +179,7 @@ fun PosterCard(
             NetImage(
                 anime.poster,
                 // Clip after the shared key so the flying copy keeps its rounded corners.
-                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedPosterKey(anime.id, it) }).clip(MaterialTheme.shapes.medium),
+                Modifier.fillMaxSize().sharedKey(poster).clip(MaterialTheme.shapes.medium),
                 anime.title,
             )
             // Bottom scrim keeps badges legible on bright posters.
@@ -184,6 +187,7 @@ fun PosterCard(
                 Modifier
                     .fillMaxSize()
                     .aboveSharedElements()
+                    .revealWhenLanded(poster)
                     .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f))),
             )
             if (anime.isOngoing) {
@@ -191,6 +195,7 @@ fun PosterCard(
                     Modifier
                         .align(Alignment.TopStart)
                         .aboveSharedElements()
+                        .revealWhenLanded(poster)
                         .padding(6.dp)
                         .clip(RoundedCornerShape(50))
                         .background(Color.Black.copy(alpha = 0.6f))
@@ -208,7 +213,7 @@ fun PosterCard(
                     meta,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.align(Alignment.BottomStart).aboveSharedElements().padding(8.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).aboveSharedElements().revealWhenLanded(poster).padding(8.dp),
                 )
             }
         }
@@ -320,28 +325,29 @@ fun ContinueWatchingCard(
             .clip(MaterialTheme.shapes.medium)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
     ) {
+        val thumb = rememberSharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) })
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)) {
             NetImage(
                 entry.episodeThumbnail.ifBlank { entry.animeCover },
-                Modifier.fillMaxSize().sharedKey(sharedOrigin?.let { sharedEpisodeKey(entry.episodeId, it) }).clip(MaterialTheme.shapes.medium),
+                Modifier.fillMaxSize().sharedKey(thumb).clip(MaterialTheme.shapes.medium),
             )
-            Box(Modifier.fillMaxSize().aboveSharedElements().background(Color.Black.copy(alpha = 0.25f)))
+            Box(Modifier.fillMaxSize().aboveSharedElements().revealWhenLanded(thumb).background(Color.Black.copy(alpha = 0.25f)))
             Surface(
                 shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier.align(Alignment.Center).aboveSharedElements().size(44.dp),
+                modifier = Modifier.align(Alignment.Center).aboveSharedElements().revealWhenLanded(thumb).size(44.dp),
             ) {
                 Icon(Icons.Rounded.PlayArrow, "Lanjutkan", tint = Color.White, modifier = Modifier.padding(8.dp))
             }
             Pill(
                 "EP ${entry.episodeNumber}",
-                Modifier.align(Alignment.TopStart).aboveSharedElements().padding(8.dp),
+                Modifier.align(Alignment.TopStart).aboveSharedElements().revealWhenLanded(thumb).padding(8.dp),
                 container = MaterialTheme.colorScheme.primary,
                 content = MaterialTheme.colorScheme.onPrimary,
             )
             LinearProgressIndicator(
                 progress = { entry.progress },
-                modifier = Modifier.align(Alignment.BottomCenter).aboveSharedElements().fillMaxWidth().height(3.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).aboveSharedElements().revealWhenLanded(thumb).fillMaxWidth().height(3.dp),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = Color.White.copy(alpha = 0.25f),
                 drawStopIndicator = {},
