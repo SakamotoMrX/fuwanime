@@ -178,29 +178,35 @@ class MangaDownloadRepository(private val context: Context, private val dao: Man
     }
 
     private fun deleteDocument(uri: String) {
-        runCatching { DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(uri)) }
+        val u = Uri.parse(uri)
+        if (u.scheme == "file") File(u.path!!).delete()
+        else runCatching { DocumentsContract.deleteDocument(context.contentResolver, u) }
     }
 
     /**
-     * When a download folder is set, packs the finished chapter into "<title> - <chapter>.cbz" there and removes the
-     * app copy. Any failure keeps the pages in the app folder, so nothing is lost.
+     * Packs a finished chapter into one CBZ, "<title> - <chapter>.cbz": in the picked download folder when one is set,
+     * else next to the app's other manga files; then removes the loose pages. Any failure keeps the pages, so nothing is lost.
      */
-    suspend fun exportIfFolder(row: MangaDownloadEntity) = withContext(Dispatchers.IO) {
-        val folder = settings.settings.first().downloadFolder ?: return@withContext
+    suspend fun packCbz(row: MangaDownloadEntity) = withContext(Dispatchers.IO) {
+        val folder = settings.settings.first().downloadFolder
         val dir = chapterDir(root(), row.mangaId, row.chapterId)
         val pages = dir.listFiles { f -> !f.name.endsWith(".part") }.orEmpty().toList()
         if (pages.isEmpty()) return@withContext
         var target: Uri? = null
         try {
-            val tree = Uri.parse(folder)
-            val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
             val name = "${row.mangaTitle} - ${row.chapterLabel}.cbz".replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            target = DocumentsContract.createDocument(context.contentResolver, parent, "application/vnd.comicbook+zip", name) ?: return@withContext
+            target = if (folder != null) {
+                val tree = Uri.parse(folder)
+                val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+                DocumentsContract.createDocument(context.contentResolver, parent, "application/vnd.comicbook+zip", name) ?: return@withContext
+            } else {
+                Uri.fromFile(File(dir.parentFile, safeName(row.chapterId) + ".cbz"))
+            }
             context.contentResolver.openOutputStream(target)!!.use { writeCbz(pages, it) }
             dao.setFile(row.chapterId, target.toString(), pages.sumOf { it.length() })
             dir.deleteRecursively()
         } catch (e: Exception) {
-            target?.let { t -> runCatching { DocumentsContract.deleteDocument(context.contentResolver, t) } }
+            target?.let { deleteDocument(it.toString()) }
         }
     }
 

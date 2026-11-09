@@ -27,7 +27,7 @@ data class MangaDownloadEntity(
     /** [MangaDownloadState] name. */
     val state: String,
     val createdAt: Long,
-    /** CBZ document in the user's folder once moved there; null while the pages are in the app folder. */
+    /** The chapter's CBZ (file:// in the app folder, content:// in a picked folder); null while it is still loose pages. */
     val fileUri: String? = null,
 )
 
