@@ -27,6 +27,8 @@ data class MangaDownloadEntity(
     /** [MangaDownloadState] name. */
     val state: String,
     val createdAt: Long,
+    /** CBZ document in the user's folder once moved there; null while the pages are in the app folder. */
+    val fileUri: String? = null,
 )
 
 @Dao
@@ -51,6 +53,9 @@ interface MangaDownloadDao {
 
     @Query("UPDATE manga_downloads SET pageCount = :pageCount, pagesDone = :pagesDone, bytes = :bytes WHERE chapterId = :chapterId")
     suspend fun progress(chapterId: String, pageCount: Int, pagesDone: Int, bytes: Long)
+
+    @Query("UPDATE manga_downloads SET fileUri = :fileUri, bytes = :bytes WHERE chapterId = :chapterId")
+    suspend fun setFile(chapterId: String, fileUri: String, bytes: Long)
 
     @Query("UPDATE manga_downloads SET state = :state WHERE chapterId = :chapterId")
     suspend fun setState(chapterId: String, state: String)

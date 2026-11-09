@@ -1,5 +1,6 @@
 package com.fuwanime.ui.detail
 
+import com.fuwanime.ui.components.rememberDownloadGate
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalDensity
@@ -163,6 +164,7 @@ fun DetailRoute(
     onAnimeClick: OpenAnime,
     onGenre: (String) -> Unit,
 ) {
+    val gate = rememberDownloadGate()
     val vm: DetailViewModel = fuwaViewModel(key = "detail") { c, h -> DetailViewModel(c.animeRepository, c.libraryRepository, c.downloadRepository, c.settingsStore, c.animeLinkRepository, h) }
     val state by vm.state.collectAsStateWithLifecycle()
     val favorite by vm.isFavorite.collectAsStateWithLifecycle()
@@ -441,7 +443,7 @@ private fun DetailScreen(
                         progress[ep.id],
                         isResume = resume?.episodeId == ep.id,
                         download = downloads[ep.id],
-                        onDownload = { vm.download(ep) },
+                        onDownload = { gate { vm.download(ep) } },
                         onDeleteDownload = { vm.deleteDownload(ep) },
                         onClick = { anime?.let { onPlay(it, ep, sharedEpisodeKey(ep.id, "detail"), ep.thumbnail) } },
                     )
@@ -716,7 +718,7 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
                 Text(pluralStringResource(R.plurals.watch_bulk_message, 30, 30))
             },
             confirmButton = {
-                TextButton(onClick = { confirmDownloadAll = false; vm.downloadAllEpisodes() }) { Text(stringResource(R.string.watch_bulk_confirm)) }
+                TextButton(onClick = { confirmDownloadAll = false; gate { vm.downloadAllEpisodes() } }) { Text(stringResource(R.string.watch_bulk_confirm)) }
             },
             dismissButton = { TextButton(onClick = { confirmDownloadAll = false }) { Text(stringResource(R.string.watch_cancel)) } },
         )
