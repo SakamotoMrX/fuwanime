@@ -388,7 +388,6 @@ fun FuwaNavHost(initialTarget: LaunchTarget? = null, onInitialTargetConsumed: ()
                                     onStats = { nav.navigate(Routes.STATS) },
                                     onSettings = { nav.navigate(Routes.SETTINGS) },
                                     onMangaClick = openManga,
-                                    onMangaRead = { m, c -> nav.navigate(Routes.mangaReader(m, c)) },
                                 )
                             }
                         }
