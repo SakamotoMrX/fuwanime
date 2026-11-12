@@ -117,8 +117,10 @@ jobs:
 
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
-          # Monotonik version code di atas instalasi lama (30M offset)
-          echo "VERSION_CODE=$((30000000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          # Version code dari SemVer, 40M offset: harus di atas build lama (30M + run build.yml, sudah >30000100).
+          # Run number release.yml mulai dari 1, jadi 30M + run bikin APK rilis "lebih tua" dan gagal di-install.
+          IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "${VERSION_NAME%%-*}"
+          echo "VERSION_CODE=$((40000000 + V_MAJOR * 1000000 + V_MINOR * 1000 + V_PATCH))" >> "$GITHUB_ENV"
 
       - name: Decode signing keystore
         env:
