@@ -68,7 +68,6 @@ data class DetailUiState(
 sealed interface MangaLookup {
     data object Idle : MangaLookup
     data object Searching : MangaLookup
-    data object NotFound : MangaLookup
     data class Found(val mangaId: String) : MangaLookup
 }
 
@@ -117,7 +116,8 @@ class DetailViewModel(
         _state.update { it.copy(mangaLookup = MangaLookup.Searching) }
         viewModelScope.launch {
             val found = manga.findAnywhere(names)
-            _state.update { it.copy(mangaLookup = found?.let { m -> MangaLookup.Found(m.id) } ?: MangaLookup.NotFound) }
+            // A miss may be offline or a timeout, not a real absence, so the button stays usable for a retry.
+            _state.update { it.copy(mangaLookup = found?.let { m -> MangaLookup.Found(m.id) } ?: MangaLookup.Idle) }
             if (found == null) say(R.string.watch_manga_not_found)
         }
     }

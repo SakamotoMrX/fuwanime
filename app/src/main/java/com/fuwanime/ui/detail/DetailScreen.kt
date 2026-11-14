@@ -907,10 +907,10 @@ private fun EpisodeDownloadButton(download: DownloadItem?, onDownload: () -> Uni
     }
 }
 
-/** Opens the manga this anime adapts; disabled once the sources came back empty. */
+/** Opens the manga this anime adapts. */
 @Composable
 private fun ReadMangaButton(lookup: MangaLookup, onClick: () -> Unit, modifier: Modifier) {
-    OutlinedButton(onClick = onClick, enabled = lookup != MangaLookup.NotFound, modifier = modifier) {
+    OutlinedButton(onClick = onClick, modifier = modifier) {
         if (lookup == MangaLookup.Searching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         else Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
