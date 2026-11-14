@@ -39,7 +39,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -98,6 +98,7 @@ import com.fuwanime.util.friendlyText
 import com.fuwanime.util.fuwaViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,17 +120,44 @@ fun readerChapter(chapters: List<MangaChapter>, chapterId: String, savedLabel: S
 fun readerStartIndex(savedPage: Int?, pageCount: Int): Int =
     if (pageCount <= 0) 0 else (savedPage ?: 0).coerceIn(0, pageCount - 1)
 
+/** External (official-site) chapters can't be shown in the reader, so navigation skips them. */
+fun readableChapters(chapters: List<MangaChapter>): List<MangaChapter> =
+    chapters.filter { it.externalUrl == null && it.pages > 0 }
+
+/** The chapter to load below the last one in the reader, or null at the end. */
+fun nextToAppend(chapters: List<MangaChapter>, segments: List<ReaderSegment>): MangaChapter? =
+    segments.lastOrNull()?.let { nextChapter(readableChapters(chapters), it.chapter.id) }
+
+/** (segment, page) of a list item; each segment is one header item followed by its pages. */
+fun readerPosition(pageCounts: List<Int>, itemIndex: Int): Pair<Int, Int> {
+    var start = 0
+    pageCounts.forEachIndexed { s, count ->
+        val end = start + count
+        if (itemIndex <= end) return s to (itemIndex - start - 1).coerceIn(0, (count - 1).coerceAtLeast(0))
+        start = end + 1
+    }
+    return pageCounts.lastIndex.coerceAtLeast(0) to (pageCounts.lastOrNull() ?: 1) - 1
+}
+
+/** One chapter's pages in the continuous reader. */
+data class ReaderSegment(
+    val chapter: MangaChapter,
+    val pages: List<String>,
+    /** Bumped when page URLs are refetched, so failed images retry with the new server. */
+    val generation: Int = 0,
+)
+
 data class ReaderState(
     val manga: Manga? = null,
     val chapters: List<MangaChapter> = emptyList(),
-    val chapter: MangaChapter? = null,
-    val pages: List<String>? = null,
+    /** The opened chapter first, then each chapter appended as the reader scrolls on. */
+    val segments: List<ReaderSegment> = emptyList(),
     val startPage: Int = 0,
     val error: UiText? = null,
     /** The chapter last asked for, so a retry reopens it even before it has loaded. */
     val requestedId: String = "",
-    /** Bumped when page URLs are refetched, so failed images retry with the new server. */
-    val generation: Int = 0,
+    val appending: Boolean = false,
+    val appendFailed: Boolean = false,
 )
 
 class MangaReaderViewModel(
@@ -148,8 +176,11 @@ class MangaReaderViewModel(
 
     init { open(firstChapterId) }
 
+    private var appendJob: Job? = null
+
     fun open(chapterId: String) {
-        _state.value = _state.value.copy(chapter = null, pages = null, error = null, requestedId = chapterId)
+        appendJob?.cancel()
+        _state.value = _state.value.copy(segments = emptyList(), error = null, requestedId = chapterId, appending = false, appendFailed = false)
         viewModelScope.launch {
             try {
                 val dataSaver = settings.mangaDataSaver.first()
@@ -176,7 +207,7 @@ class MangaReaderViewModel(
                 val saved = library.historyFor(mangaId).first().firstOrNull { it.chapterId == chapterId }
                 val chapter = readerChapter(chapters, chapterId, saved?.chapterLabel)
                 val pages = pagesJob.await().getOrThrow()
-                _state.value = ReaderState(manga, chapters, chapter, pages, readerStartIndex(saved?.page, pages.size), requestedId = chapterId, generation = _state.value.generation)
+                _state.value = ReaderState(manga, chapters, listOf(ReaderSegment(chapter, pages)), readerStartIndex(saved?.page, pages.size), requestedId = chapterId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -185,12 +216,38 @@ class MangaReaderViewModel(
         }
     }
 
+    /** Loads the next readable chapter below the last one, so reading scrolls straight on. */
+    fun appendNext() {
+        val s = _state.value
+        if (s.appending) return
+        val last = s.segments.lastOrNull() ?: return
+        val next = nextToAppend(s.chapters, s.segments) ?: return
+        _state.value = s.copy(appending = true, appendFailed = false)
+        appendJob = viewModelScope.launch {
+            val pages = try {
+                downloads.localPages(next.id) ?: repo.pages(next.id, settings.mangaDataSaver.first())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val now = _state.value
+            // A chapter switch (open) replaced the segments meanwhile; this result belongs to the old list.
+            if (now.segments.lastOrNull()?.chapter?.id != last.chapter.id) return@launch
+            _state.value = if (pages.isNullOrEmpty()) now.copy(appending = false, appendFailed = true)
+            else now.copy(segments = now.segments + ReaderSegment(next, pages), appending = false)
+        }
+    }
+
     /** MangaDex@Home URLs expire; a failed image asks for a fresh server. */
-    fun refreshPages() {
-        val chapter = _state.value.chapter ?: return
+    fun refreshPages(chapterId: String) {
         viewModelScope.launch {
-            runCatching { repo.pages(chapter.id, settings.mangaDataSaver.first(), forceRefresh = true) }
-                .onSuccess { pages -> _state.value = _state.value.copy(pages = pages, generation = _state.value.generation + 1) }
+            runCatching { repo.pages(chapterId, settings.mangaDataSaver.first(), forceRefresh = true) }
+                .onSuccess { pages ->
+                    _state.value = _state.value.copy(
+                        segments = _state.value.segments.map { if (it.chapter.id == chapterId) it.copy(pages = pages, generation = it.generation + 1) else it },
+                    )
+                }
         }
     }
 
@@ -232,28 +289,59 @@ fun MangaReaderRoute(mangaId: String, chapterId: String, onBack: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        val chapter = state.chapter
-        val pages = state.pages
+        val segments = state.segments
         when {
             state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 ErrorState(state.error!!, onRetry = { vm.open(state.requestedId.ifEmpty { chapterId }) })
             }
-            chapter == null || pages == null -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
-            else -> key(chapter.id) {
-                val label = chapterLabel(chapter)
+            segments.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            else -> key(segments.first().chapter.id) {
                 // From the start, show the credit above page 1; when resuming, jump straight to the saved page.
                 val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (state.startPage == 0) 0 else state.startPage + 1)
-                // External (official-site) chapters can't be shown here, so prev/next skip them.
-                val readable = remember(state.chapters) { state.chapters.filter { it.externalUrl == null && it.pages > 0 } }
+                val readable = remember(state.chapters) { readableChapters(state.chapters) }
+                val pageCounts by rememberUpdatedState(segments.map { it.pages.size })
+                val position by remember { derivedStateOf { readerPosition(pageCounts, listState.firstVisibleItemIndex) } }
+                val (active, currentPage) = position
+                val segment = segments[active.coerceAtMost(segments.lastIndex)]
+                val chapter = segment.chapter
+                val pages = segment.pages
+                val label = chapterLabel(chapter)
                 val next = nextChapter(readable, chapter.id)
                 val previous = previousChapter(readable, chapter.id)
-                val currentPage by remember {
-                    derivedStateOf { (listState.firstVisibleItemIndex - 1).coerceIn(0, (pages.size - 1).coerceAtLeast(0)) }
+                // Labels per segment, so saves made off-screen (crossing, dispose) keep the right chapter name.
+                val labels = segments.map { chapterLabel(it.chapter) }
+                val latestLabels by rememberUpdatedState(labels)
+                val latestSegments by rememberUpdatedState(segments)
+
+                LaunchedEffect(Unit) {
+                    var lastSegment = 0
+                    snapshotFlow { position }.distinctUntilChanged().collect { (s, _) ->
+                        // Crossed into a later chapter: the one left behind was read to its end.
+                        if (s > lastSegment) latestSegments.getOrNull(lastSegment)?.let {
+                            vm.saveProgress(it.chapter, it.pages.size - 1, it.pages.size, latestLabels[lastSegment])
+                        }
+                        lastSegment = s
+                    }
                 }
                 LaunchedEffect(Unit) {
-                    snapshotFlow { currentPage }.distinctUntilChanged().debounce(1_000).collect { vm.saveProgress(chapter, it, pages.size, label) }
+                    snapshotFlow { position }.distinctUntilChanged().debounce(1_000).collect { (s, p) ->
+                        latestSegments.getOrNull(s)?.let { vm.saveProgress(it.chapter, p, it.pages.size, latestLabels[s]) }
+                    }
                 }
-                DisposableEffect(Unit) { onDispose { vm.saveProgress(chapter, currentPage, pages.size, label) } }
+                DisposableEffect(Unit) {
+                    onDispose {
+                        val (s, p) = position
+                        latestSegments.getOrNull(s)?.let { vm.saveProgress(it.chapter, p, it.pages.size, latestLabels[s]) }
+                    }
+                }
+                // Load the next chapter a few pages before the end, so it is usually ready on arrival.
+                LaunchedEffect(Unit) {
+                    // Keyed on the item count too, so a short appended chapter that still ends on screen loads the next one.
+                    snapshotFlow { listState.layoutInfo.let { if ((it.visibleItemsInfo.lastOrNull()?.index ?: 0) >= it.totalItemsCount - 4) it.totalItemsCount else -1 } }
+                        .distinctUntilChanged()
+                        .collect { if (it >= 0) vm.appendNext() }
+                }
+                val hasMore = nextToAppend(state.chapters, segments) != null
 
                 LazyColumn(
                     state = listState,
@@ -262,10 +350,28 @@ fun MangaReaderRoute(mangaId: String, chapterId: String, onBack: () -> Unit) {
                         indication = null,
                     ) { barsVisible = !barsVisible },
                 ) {
-                    item(key = "credit-top") { Credit(chapter, Modifier.statusBarsPadding().padding(top = 56.dp, bottom = 8.dp)) }
-                    itemsIndexed(pages, key = { i, _ -> "${chapter.id}-$i" }) { i, url -> Page(url, i, state.generation, vm::refreshPages) }
+                    segments.forEachIndexed { s, seg ->
+                        item(key = "head-${seg.chapter.id}") {
+                            if (s == 0) Credit(seg.chapter, Modifier.statusBarsPadding().padding(top = 56.dp, bottom = 8.dp))
+                            else ChapterDivider(labels[s], seg.chapter)
+                        }
+                        itemsIndexed(seg.pages, key = { i, _ -> "${seg.chapter.id}-$i" }) { i, url ->
+                            Page(url, i, seg.generation) { vm.refreshPages(seg.chapter.id) }
+                        }
+                    }
                     item(key = "end") {
-                        EndCard(label, chapter, next, onNext = { next?.let { vm.open(it.id) } })
+                        when {
+                            state.appendFailed -> Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                                TextButton(onClick = vm::appendNext) {
+                                    Icon(Icons.Rounded.Refresh, null, tint = Color.White)
+                                    Text(stringResource(R.string.manga_reader_reload), color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
+                            hasMore -> Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = Color.White.copy(alpha = 0.6f))
+                            }
+                            else -> EndCard(labels.last(), segments.last().chapter)
+                        }
                     }
                 }
 
@@ -317,7 +423,7 @@ fun MangaReaderRoute(mangaId: String, chapterId: String, onBack: () -> Unit) {
             }
         }
         // Loading and error states have no reader bar; keep a way out.
-        if (state.error != null || state.chapter == null || state.pages == null) {
+        if (state.error != null || state.segments.isEmpty()) {
             IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(4.dp)) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.mine_back), tint = Color.White)
             }
@@ -405,7 +511,7 @@ private fun Page(url: String, index: Int, generation: Int, onFailed: () -> Unit)
 }
 
 @Composable
-private fun EndCard(label: String, chapter: MangaChapter, next: MangaChapter?, onNext: () -> Unit) {
+private fun EndCard(label: String, chapter: MangaChapter) {
     Column(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -413,10 +519,19 @@ private fun EndCard(label: String, chapter: MangaChapter, next: MangaChapter?, o
     ) {
         Text(stringResource(R.string.manga_reader_end, label), color = Color.White, style = MaterialTheme.typography.titleMedium)
         Credit(chapter)
-        if (next != null) {
-            Button(onClick = onNext) { Text(stringResource(R.string.manga_reader_next)) }
-        } else {
-            Text(stringResource(R.string.manga_reader_last), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
-        }
+        Text(stringResource(R.string.manga_reader_last), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Where one chapter ends and the next begins in the continuous scroll. */
+@Composable
+private fun ChapterDivider(label: String, chapter: MangaChapter) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(label, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Credit(chapter)
     }
 }
