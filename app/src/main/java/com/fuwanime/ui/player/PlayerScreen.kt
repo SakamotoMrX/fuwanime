@@ -567,7 +567,8 @@ fun PlayerRoute(
                     showSettings = false
                     val title = nowPlaying(res, state.episode, state.anime).let { np -> listOf(np.artist, np.title).filter { it.isNotBlank() }.joinToString(" · ") }
                     try {
-                        externalLauncher.launch(Intent.createChooser(externalPlayerIntent(s.url, title, externalFrom), null))
+                        // No chooser: it would swallow ActivityNotFoundException and may drop the other app's result.
+                        externalLauncher.launch(externalPlayerIntent(s.url, title, externalFrom))
                     } catch (e: ActivityNotFoundException) {
                         externalScope.launch { snackbar.showSnackbar(res.getString(R.string.watch_no_external_player)) }
                     }
