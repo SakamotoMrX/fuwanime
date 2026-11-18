@@ -76,6 +76,84 @@ fun pickChapters(all: List<MangaChapter>, preferred: String): List<MangaChapter>
         (odd + oneshots).sortedBy { it.publishAt }
 }
 
+/** One entry per title: a later entry whose title matches an earlier one (either side's alt titles) is dropped. */
+fun dedupeByTitle(list: List<Manga>): List<Manga> {
+    val kept = ArrayList<Manga>()
+    for (m in list) {
+        if (kept.none { k -> sameTitle(k.title, m.title, m.altTitles) || sameTitle(m.title, k.title, k.altTitles) }) kept += m
+    }
+    return kept
+}
+
+/** Source spellings of the same genre, keyed by lowercase, mapped to the one name the app shows and filters by. */
+private val GENRE_ALIASES = mapOf(
+    "shounen ai" to "Boys Love", "shonen ai" to "Boys Love", "yaoi" to "Boys Love", "bl" to "Boys Love",
+    "shoujo ai" to "Girls Love", "shojo ai" to "Girls Love", "yuri" to "Girls Love", "gl" to "Girls Love",
+    "school" to "School Life", "super power" to "Superpower", "superpowers" to "Superpower",
+    "sci fi" to "Sci-Fi", "scifi" to "Sci-Fi", "science fiction" to "Sci-Fi",
+    "slice-of-life" to "Slice of Life", "martial art" to "Martial Arts",
+)
+
+/** Clean a genre/tag name from sources (strip quotes, normalise whitespace, unify known spellings). */
+fun cleanGenreName(raw: String): String {
+    val clean = raw
+        .replace("\"", "")
+        .replace("“", "").replace("”", "").replace("„", "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .trim(',', ';')
+    return GENRE_ALIASES[clean.lowercase().replace('_', ' ')] ?: clean
+}
+
+/**
+ * Applies the explore filters the sources can't. [status] and [type] only drop titles whose source states
+ * the opposite (an unknown value passes, so a source without that field is never emptied by a chip);
+ * [genres] must all be present, compared after [cleanGenreName].
+ */
+fun filterManga(items: List<Manga>, status: MangaStatus?, type: MangaType?, genres: Set<String>): List<Manga> {
+    val wanted = genres.map { cleanGenreName(it).lowercase() }.filter { it.isNotBlank() }
+    return items.filter { m ->
+        (status == null || m.status == MangaStatus.UNKNOWN || m.status == status) &&
+            (type == null || m.type == null || m.type.equals(type.label, ignoreCase = true)) &&
+            (wanted.isEmpty() || m.tags.mapTo(HashSet()) { cleanGenreName(it).lowercase() }.containsAll(wanted))
+    }
+}
+
+/** Deduplicate genre names case-insensitively while preserving first-seen display form. */
+fun dedupeGenreNames(names: Iterable<String>): List<String> {
+    val out = mutableListOf<String>()
+    val seen = HashSet<String>()
+    for (n in names) {
+        val clean = cleanGenreName(n)
+        if (clean.isBlank()) continue
+        val key = clean.lowercase()
+        if (seen.add(key)) out += clean
+    }
+    return out
+}
+
+/** Union of genres across anime and manga sources used by FuwaStream (deduped). */
+fun mangaGenresFromAllSources(): List<String> = dedupeGenreNames(
+    listOf(
+        // Anime (general + mature)
+        "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Isekai", "Romance", "School",
+        "Slice of Life", "Supernatural", "Mystery", "Psychological", "Sci-Fi", "Mecha", "Sports",
+        "Magic", "Super Power", "Martial Arts", "Historical", "Military", "Seinen", "Shounen",
+        "Shoujo", "Shoujo Ai", "Shounen Ai", "Josei", "Harem", "Horror", "Thriller", "Game",
+        "Parody", "Demons", "Vampire", "Music", "Police", "Space", "Cars", "Samurai", "Ecchi",
+        "Erotica", "Hentai",
+        // Manga sources (Shinigami/Komiku/MangaPark/KakaManga/Webtoon common genres)
+        "Adult", "Doujinshi", "Gender Bender", "Mature", "Tragedy", "Webtoon", "Full Color",
+        "Adaptation", "Animals", "Anthology", "Boys Love", "Girls Love", "Cooking", "Crime",
+        "Delinquents", "Dementia", "Gore", "Gyaru", "Incest", "Isekai", "Loli", "Medical",
+        "Monster Girls", "Ninja", "Office Workers", "Philosophical", "Post-Apocalyptic",
+        "Reincarnation", "Reverse Harem", "Romance", "School Life", "Sci-Fi", "Shota",
+        "Smut", "Survival", "Time Travel", "Traditional Games", "Urban", "Villainess",
+        "Virtual Reality", "Wuxia", "Zombies", "4-Koma", "Award Winning", "Oneshot",
+        "Long Strip", "Manhwa", "Manhua", "Comic", "Yaoi", "Yuri",
+    ),
+)
+
 enum class ChapterLang { ID, EN, RAW }
 
 /** Raw = untranslated uploads (Japanese, Korean, Chinese); everything else that is not Indonesian counts as English. */
@@ -85,13 +163,14 @@ fun languageGroup(language: String): ChapterLang = when (language.lowercase()) {
     else -> ChapterLang.EN
 }
 
-/** 0 Shinigami, 1 Komiku, 2 Comix, 3 Webtoon: lower wins when several sources have the same chapter. */
+/** 0 Shinigami, 1 Komiku, 2 Webtoon, 3 KakaManga, 4 MangaPark: lower wins when several sources have the same chapter. */
 fun sourceRank(chapterId: String): Int = when {
     chapterId.startsWith(SH_PREFIX) -> 0
     chapterId.startsWith(KM_PREFIX) -> 1
-    isComixId(chapterId) -> 2
-    isWebtoonId(chapterId) -> 3
-    else -> 4
+    isWebtoonId(chapterId) -> 2
+    isKakaMangaId(chapterId) -> 3
+    isMangaParkId(chapterId) -> 4
+    else -> 5
 }
 
 private fun MangaChapter.readable() = externalUrl == null && pages > 0

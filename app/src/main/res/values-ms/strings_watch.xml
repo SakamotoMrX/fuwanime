@@ -1,5 +1,6 @@
 <resources>
     <string name="watch_stat_views">tontonan</string>
+    <string name="watch_stat_members">peminat</string>
     <string name="watch_stat_favorites">kegemaran</string>
     <string name="watch_continue_ep">Sambung EP %1$s</string>
     <string name="watch_watch_ep">Tonton EP %1$s</string>
@@ -26,6 +27,8 @@
     <string name="watch_info_aired">Mula tayangan</string>
     <string name="watch_info_year">Tahun</string>
     <string name="watch_info_type">Jenis</string>
+    <string name="watch_info_total_episodes">Jumlah episod</string>
+    <string name="watch_info_duration">Tempoh</string>
     <string name="watch_episodes_title">Episod</string>
     <string name="watch_download_all">Muat turun semua</string>
     <string name="watch_search_close">Tutup carian episod</string>
@@ -53,6 +56,10 @@
     <string name="watch_msg_queued_episode">Episod %1$s masuk giliran muat turun</string>
     <string name="watch_msg_no_episodes_download">Belum ada episod untuk dimuat turun.</string>
     <string name="watch_msg_all_saved">Semua episod sudah disimpan atau sedang dimuat turun.</string>
+    <string name="watch_bulk_from">Dari episod</string>
+    <string name="watch_bulk_to">Hingga episod</string>
+    <string name="watch_msg_none_in_range">Tiada episod dalam julat itu.</string>
+    <string name="watch_msg_more_in_range">Julat ini melebihi %1$d episod. %1$d yang pertama diberatkan; ulang dengan julat seterusnya untuk selebihnya.</string>
     <string name="watch_msg_download_removed">Muat turun Episod %1$s dipadam</string>
     <string name="watch_range_all">Semua</string>
     <string name="watch_err_connection">Sambungan terputus semasa memainkan video.</string>
@@ -89,6 +96,7 @@
     <string name="watch_cast">Watak &amp; Pelakon Suara</string>
     <string name="watch_cast_main">Utama</string>
     <string name="watch_cast_supporting">Sampingan</string>
+    <string name="watch_trailer">Tonton treler</string>
     <string name="watch_read_manga">Baca versi manga</string>
     <string name="watch_manga_not_found">Versi manga belum tersedia di FuwaStream</string>
     <string name="watch_open_external">Buka dalam pemain lain</string>
@@ -123,7 +131,7 @@
     <string name="watch_skip_ed">Langkau ED</string>
     <string name="watch_skip_recap">Langkau recap</string>
     <plurals name="watch_bulk_message">
-        <item quantity="other">Beratur sehingga %1$d episod terbaharu yang belum disimpan, menggunakan kualiti muat turun dan pilihan Wi-Fi daripada Tetapan.</item>
+        <item quantity="other">Beratur sehingga %1$d episod dalam julat ini yang belum disimpan, bermula dari yang terkecil. Kualiti dan pilihan Wi-Fi daripada Tetapan.</item>
     </plurals>
     <plurals name="watch_msg_preparing_count">
         <item quantity="other">Menyediakan %1$d episod…</item>

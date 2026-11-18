@@ -80,7 +80,7 @@ fun ShMangaDto.toManga() = Manga(
     title = title.trim(),
     coverUrl = (coverPortrait ?: cover)?.takeIf { it.isNotBlank() },
     description = htmlText(description.orEmpty()),
-    tags = taxonomy?.genre.orEmpty().map { it.name }.filter { it.isNotBlank() },
+    tags = dedupeGenreNames(taxonomy?.genre.orEmpty().map { it.name }),
     status = when (status) {
         1 -> MangaStatus.ONGOING
         2 -> MangaStatus.COMPLETED
@@ -106,7 +106,10 @@ fun ShChapterDto.toChapter() = MangaChapter(
 
 fun ShPagesDataDto.toPageUrls(): List<String> = chapter.data.map { baseUrl.trimEnd('/') + chapter.path + it }
 
-private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+/** A title reduced to lowercase letters and digits, so "Mu Shen Ji" and "Mushen Ji!" compare equal. */
+fun titleKey(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+
+private fun norm(s: String) = titleKey(s)
 
 /** True when a Shinigami title (or one of its comma-separated alternative titles) is the same as [title]. */
 fun sameTitle(title: String, shTitle: String, shAlternatives: List<String>): Boolean {

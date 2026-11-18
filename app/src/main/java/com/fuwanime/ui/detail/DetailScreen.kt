@@ -1,5 +1,7 @@
 package com.fuwanime.ui.detail
 
+import android.content.Intent
+import androidx.core.net.toUri
 import com.fuwanime.ui.components.rememberDownloadGate
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -17,6 +19,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.fuwanime.R
+import com.fuwanime.util.typeLabel
+import com.fuwanime.data.manga.titleKey
 import com.fuwanime.data.meta.CastRole
 import com.fuwanime.data.meta.CastEntry
 import androidx.compose.ui.text.style.TextAlign
@@ -285,19 +289,26 @@ private fun DetailScreen(
             if (anime != null) {
                 item(key = "stats") {
                     val res = LocalContext.current.resources
-                    val viewsLabel = stringResource(R.string.watch_stat_views)
-                    val favoritesLabel = stringResource(R.string.watch_stat_favorites)
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)) { append(compactNumber(res, anime.views)) }
-                            append(" $viewsLabel      ")
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)) { append(compactNumber(res, anime.favorites)) }
-                            append(" $favoritesLabel")
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.navEnter().padding(start = 20.dp, end = 20.dp, top = 16.dp),
-                    )
+                    val meta = state.meta
+                    // Kuramanime has no public counters; AniList popularity/favourites fill the gap.
+                    val siteViews = anime.views.takeIf { it > 0 }
+                    val views = siteViews ?: meta?.popularity?.toLong() ?: 0
+                    val favorites = anime.favorites.takeIf { it > 0 } ?: meta?.favourites?.toLong() ?: 0
+                    if (views > 0 || favorites > 0) {
+                        val viewsLabel = stringResource(if (siteViews == null) R.string.watch_stat_members else R.string.watch_stat_views)
+                        val favoritesLabel = stringResource(R.string.watch_stat_favorites)
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)) { append(compactNumber(res, views)) }
+                                append(" $viewsLabel      ")
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)) { append(compactNumber(res, favorites)) }
+                                append(" $favoritesLabel")
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.navEnter().padding(start = 20.dp, end = 20.dp, top = 16.dp),
+                        )
+                    }
                 }
             }
 
@@ -384,7 +395,21 @@ private fun DetailScreen(
                     item(key = "meta") { MetaRow(meta, Modifier.navEnter(170).padding(start = 20.dp, end = 20.dp, top = 12.dp)) }
                 }
                 item(key = "synopsis") { Box(Modifier.navEnter(180)) { Synopsis(anime.synopsis) } }
-                item(key = "info") { Box(Modifier.navEnter(200)) { InfoGrid(anime) } }
+                item(key = "info") { Box(Modifier.navEnter(200)) { InfoGrid(anime, state.meta) } }
+                state.meta?.takeIf { it.trailerUrl.isNotBlank() }?.let { meta ->
+                    item(key = "trailer") {
+                        val context = LocalContext.current
+                        TrailerCard(
+                            thumbnail = meta.trailerThumbnail,
+                            fallbackThumbnail = anime?.let { a -> a.cover.ifBlank { a.poster } }.orEmpty(),
+                            onClick = {
+                                // Trailers play outside the app (YouTube/Dailymotion app or the browser).
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, meta.trailerUrl.toUri())) }
+                            },
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
+                        )
+                    }
+                }
                 if (state.meta?.sourceTitles?.isNotEmpty() == true) {
                     item(key = "read-manga") {
                         ReadMangaButton(state.mangaLookup, vm::openManga, Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp))
@@ -475,18 +500,25 @@ private fun DetailScreen(
                     )
                 }
                 else -> itemsIndexed(episodes, key = { _, e -> e.id }) { index, ep ->
+                    // Prefer the source's own thumbnail, then AniList's streaming still for this episode number,
+                    // then the anime's artwork so a row never shows an empty box.
+                    val shown = ep.copy(
+                        thumbnail = ep.thumbnail
+                            .ifBlank { state.meta?.episodeThumbnails?.get(ep.number).orEmpty() }
+                            .ifBlank { anime?.let { a -> a.cover.ifBlank { a.poster } }.orEmpty() },
+                    )
                     Box(Modifier.animateItem().staggerIn(stagger, ep.id, index)) {
                     EpisodeRow(
-                        ep,
+                        shown,
                         progress[ep.id],
                         isResume = resume?.episodeId == ep.id,
                         download = downloads[ep.id],
-                        onDownload = { gate { vm.download(ep) } },
+                        onDownload = { gate { vm.download(shown) } },
                         onDeleteDownload = { vm.deleteDownload(ep) },
                         onMark = { vm.markEpisode(ep, it) },
                         onRestart = { vm.restartEpisode(ep) },
                         onMarkBefore = { vm.markBefore(ep) },
-                        onClick = { anime?.let { onPlay(it, ep, sharedEpisodeKey(ep.id, "detail"), ep.thumbnail) } },
+                        onClick = { anime?.let { onPlay(it, shown, sharedEpisodeKey(ep.id, "detail"), shown.thumbnail) } },
                     )
                     }
                 }
@@ -579,7 +611,8 @@ private fun Header(anime: Anime?, origin: String?, entryKey: String, linkBackdro
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    val altTitle = anime.alternativeTitles.split(',', ';').firstOrNull()?.trim().orEmpty()
+                    val altTitle = anime.alternativeTitles.split(',', ';').map { it.trim() }
+                        .firstOrNull { it.isNotBlank() && titleKey(it) != titleKey(anime.title) }.orEmpty()
                     if (altTitle.isNotBlank()) {
                         Text(
                             altTitle,
@@ -593,7 +626,7 @@ private fun Header(anime: Anime?, origin: String?, entryKey: String, linkBackdro
                     val countText = stringResource(R.string.watch_episode_count, episodeCount?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty())
                     val count = if (episodeCount != null) countText else ""
                     Text(
-                        listOf(anime.displayYear, anime.type, statusLabel(LocalContext.current.resources, anime.status), count).filter { it.isNotBlank() }.joinToString(" · "),
+                        listOf(anime.displayYear, anime.type.takeIf { it.isNotBlank() }?.let { typeLabel(LocalContext.current.resources, it) }.orEmpty(), statusLabel(LocalContext.current.resources, anime.status), count).filter { it.isNotBlank() }.joinToString(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -683,12 +716,23 @@ private fun Synopsis(text: String) {
 }
 
 @Composable
-private fun InfoGrid(anime: Anime) {
+private fun InfoGrid(anime: Anime, meta: AnimeMeta?) {
+    // Kuramanime omits these fields; fall back to AniList when it has them.
+    val studio = anime.studio.ifBlank { meta?.studio.orEmpty() }
+    val year = anime.displayYear.ifBlank { meta?.year?.toString().orEmpty() }
+    val totalEpisodes = meta?.totalEpisodes?.takeIf { it > 0 }
+    val duration = meta?.durationMinutes?.takeIf { it > 0 }
     val rows = listOfNotNull(
-        anime.studio.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_studio) to it },
+        studio.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_studio) to it },
         anime.airedStart.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_aired) to it },
-        anime.displayYear.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_year) to it },
-        anime.type.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_type) to it },
+        year.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_year) to it },
+        anime.type.takeIf { it.isNotBlank() }?.let { stringResource(R.string.watch_info_type) to typeLabel(LocalContext.current.resources, it) },
+        totalEpisodes?.let {
+            stringResource(R.string.watch_info_total_episodes) to stringResource(R.string.watch_episode_count, it.toString())
+        },
+        duration?.let {
+            stringResource(R.string.watch_info_duration) to stringResource(R.string.stats_minutes, it)
+        },
     )
     if (rows.isEmpty()) return
     Surface(
@@ -712,6 +756,8 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
     val gate = rememberDownloadGate()
     var searching by rememberSaveable { mutableStateOf(false) }
     var confirmDownloadAll by rememberSaveable { mutableStateOf(false) }
+    var rangeFrom by rememberSaveable { mutableStateOf("") }
+    var rangeTo by rememberSaveable { mutableStateOf("") }
     Column(Modifier.padding(top = 24.dp)) {
         val episodesTitle = stringResource(R.string.watch_episodes_title)
         val title: @Composable (Modifier) -> Unit = { m ->
@@ -730,7 +776,11 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
             )
         }
         val actions: @Composable () -> Unit = {
-            TextButton(onClick = { confirmDownloadAll = true }) {
+            TextButton(onClick = {
+                rangeFrom = "1"
+                rangeTo = state.latestEpisode?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty()
+                confirmDownloadAll = true
+            }) {
                 Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.watch_download_all))
@@ -776,10 +826,33 @@ private fun EpisodeHeader(state: DetailUiState, vm: DetailViewModel) {
             icon = { Icon(Icons.Rounded.Download, null) },
             title = { Text(stringResource(R.string.watch_bulk_title)) },
             text = {
-                Text(pluralStringResource(R.plurals.watch_bulk_message, 30, 30))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(pluralStringResource(R.plurals.watch_bulk_message, 30, 30))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = rangeFrom,
+                            onValueChange = { rangeFrom = it.filter { c -> c.isDigit() || c == '.' } },
+                            label = { Text(stringResource(R.string.watch_bulk_from)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = rangeTo,
+                            onValueChange = { rangeTo = it.filter { c -> c.isDigit() || c == '.' } },
+                            label = { Text(stringResource(R.string.watch_bulk_to)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             },
             confirmButton = {
-                TextButton(onClick = { confirmDownloadAll = false; gate { vm.downloadAllEpisodes() } }) { Text(stringResource(R.string.watch_bulk_confirm)) }
+                TextButton(onClick = {
+                    confirmDownloadAll = false
+                    gate { vm.downloadEpisodes(rangeFrom.toDoubleOrNull(), rangeTo.toDoubleOrNull()) }
+                }) { Text(stringResource(R.string.watch_bulk_confirm)) }
             },
             dismissButton = { TextButton(onClick = { confirmDownloadAll = false }) { Text(stringResource(R.string.watch_cancel)) } },
         )
@@ -1046,6 +1119,46 @@ private fun EpisodeDownloadButton(download: DownloadItem?, onDownload: () -> Uni
             text = { Text(stringResource(if (running) R.string.watch_cancel_download_msg else R.string.watch_delete_download_msg)) },
             confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text(stringResource(if (running) R.string.watch_stop_download else R.string.watch_delete)) } },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.watch_close)) } },
+        )
+    }
+}
+
+/** Clickable trailer card: AniList's poster frame with a play badge; the trailer opens outside the app. */
+@Composable
+private fun TrailerCard(
+    thumbnail: String,
+    fallbackThumbnail: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.watch_trailer)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+    ) {
+        NetImage(thumbnail.ifBlank { fallbackThumbnail }, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(56.dp).background(Color.Black.copy(alpha = 0.65f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(34.dp), tint = Color.White)
+            }
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(10.dp)
+                .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.extraSmall)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }

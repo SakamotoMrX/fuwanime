@@ -1,7 +1,8 @@
 package com.fuwanime
 
-import com.fuwanime.data.manga.ComixWsSource
 import com.fuwanime.data.manga.KomikuSource
+import com.fuwanime.data.manga.KakaMangaSource
+import com.fuwanime.data.manga.MangaParkSource
 import com.fuwanime.data.manga.ShinigamiApi
 import com.fuwanime.data.manga.ShinigamiSource
 import com.fuwanime.data.manga.WebtoonSource
@@ -38,6 +39,7 @@ import com.fuwanime.playback.PlaybackHolder
 import java.util.concurrent.TimeUnit
 import com.fuwanime.data.remote.AnimeApiService
 import com.fuwanime.data.remote.ForceCache
+import com.fuwanime.data.remote.AnimekompiSource
 import com.fuwanime.data.remote.KuramanimeSource
 import com.fuwanime.data.remote.NetworkStatus
 import com.fuwanime.data.remote.apiCacheClient
@@ -78,6 +80,7 @@ class AppContainer(private val app: Application) {
         AnimeApiService.create(apiHttpClient),
         AnimeApiService.create(apiHttpClient.newBuilder().addInterceptor(ForceCache).build()),
         kuramanime = KuramanimeSource(httpClient, mature = { settingsStore.matureContent.first() }),
+        animekompi = AnimekompiSource(httpClient, mature = { settingsStore.matureContent.first() }),
         mature = { settingsStore.matureContent.first() },
     )
 
@@ -95,7 +98,23 @@ class AppContainer(private val app: Application) {
     val updateRepository = UpdateRepository(settingsStore)
 
     /** Video requests get the same UA as the API but none of its JSON headers. */
-    val videoHttpClient: OkHttpClient = httpClient.newBuilder().apply { interceptors().clear() }.build()
+    val videoHttpClient: OkHttpClient = httpClient.newBuilder().apply {
+        interceptors().clear()
+        // Animekompi's /api/episodes/stream proxy refuses requests that do not look like they come from its own page.
+        addInterceptor { chain ->
+            val req = chain.request()
+            chain.proceed(
+                if (req.url.host.endsWith("animekompi.sbs")) {
+                    req.newBuilder()
+                        .header("Referer", AnimekompiSource.BASE + "/")
+                        .header("Origin", AnimekompiSource.BASE)
+                        .build()
+                } else {
+                    req
+                },
+            )
+        }
+    }.build()
 
     /** Downloads a release APK and opens the system installer, so updating needs no browser. */
     val appInstaller by lazy { AppInstaller(app, videoHttpClient) }
@@ -149,8 +168,9 @@ class AppContainer(private val app: Application) {
             appLanguage = { app.resources.configuration.locales[0].language },
             shinigami = ShinigamiSource(ShinigamiApi.create(mangaHttpClient)),
             komiku = KomikuSource(mangaHttpClient),
-            comix = ComixWsSource(app, mature = { settingsStore.matureContent.first() }, client = mangaHttpClient),
             webtoon = WebtoonSource(mangaHttpClient),
+            kakaManga = KakaMangaSource(mangaHttpClient),
+            mangaPark = MangaParkSource(mangaHttpClient),
             mature = { settingsStore.matureContent.first() },
         )
     }

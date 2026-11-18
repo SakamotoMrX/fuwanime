@@ -24,7 +24,7 @@ class AnimeLinkMigrationTest {
         return out
     }
 
-    @Test fun migrations8to10AddSourceTitlesAndCast() {
+    @Test fun migrations8to12AddSourceTitlesCastStatsThumbnailsAndTrailer() {
         val config = SupportSQLiteOpenHelper.Configuration.builder(ApplicationProvider.getApplicationContext())
             .name(null)
             .callback(object : SupportSQLiteOpenHelper.Callback(8) {
@@ -42,11 +42,26 @@ class AnimeLinkMigrationTest {
         migrated.execSQL("INSERT INTO anime_link VALUES ('a1', 'LINKED', 7, 1007, 80, 'Action', NULL, NULL, 1)")
         FuwaDatabase.MIGRATION_8_9.migrate(migrated)
         FuwaDatabase.MIGRATION_9_10.migrate(migrated)
+        FuwaDatabase.MIGRATION_10_11.migrate(migrated)
+        FuwaDatabase.MIGRATION_11_12.migrate(migrated)
 
-        migrated.query("SELECT sourceTitles, `cast` FROM anime_link WHERE animeId = 'a1'").use { c ->
+        migrated.query(
+            "SELECT sourceTitles, `cast`, popularity, favourites, totalEpisodes, durationMinutes, studio, year, episodeThumbnails, trailerUrl, trailerThumbnail, fetchedAt " +
+                "FROM anime_link WHERE animeId = 'a1'",
+        ).use { c ->
             c.moveToFirst()
             assertEquals("", c.getString(0))
             assertEquals("", c.getString(1))
+            assertEquals(null, c.getString(2))
+            assertEquals(null, c.getString(3))
+            assertEquals(null, c.getString(4))
+            assertEquals(null, c.getString(5))
+            assertEquals(null, c.getString(6))
+            assertEquals(null, c.getString(7))
+            assertEquals("", c.getString(8))
+            assertEquals("", c.getString(9))
+            assertEquals("", c.getString(10))
+            assertEquals(0L, c.getLong(11))
         }
         val room = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), FuwaDatabase::class.java).build()
         try {
