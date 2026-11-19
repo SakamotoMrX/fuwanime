@@ -30,7 +30,8 @@ import com.fuwanime.data.local.FuwaDatabase
 import com.fuwanime.data.local.SettingsStore
 import com.fuwanime.data.manga.MangaDownloadRepository
 import com.fuwanime.data.manga.MangaRepository
-import com.fuwanime.data.manga.IsMangaChapterTranslator
+import com.fuwanime.data.manga.MangaChapterTranslator
+import com.fuwanime.data.manga.MangaTranslateV2ChapterTranslator
 import com.fuwanime.data.meta.AniListApi
 import com.fuwanime.data.meta.AniSkipApi
 import com.fuwanime.data.meta.AnimeLinkRepository
@@ -180,8 +181,10 @@ class AppContainer(private val app: Application) {
     /** Downloaded manga chapters (app-private files), fetched one at a time by MangaDownloadWorker. */
     val mangaDownloads by lazy { MangaDownloadRepository(app, mangaDownloadDao, settingsStore) }
 
-    /** IsManga server-side EN→ID translation for chapter pages. */
-    val mangaTranslator by lazy { IsMangaChapterTranslator(app, videoHttpClient) }
+    /** Manga chapter translator: MangaTranslate only (no fallback source). */
+    val mangaTranslator: MangaChapterTranslator by lazy {
+        MangaTranslateV2ChapterTranslator(app, videoHttpClient)
+    }
 
     /** Daily backup file in a folder the user picked; survives an uninstall. */
     val backupRepository by lazy { BackupRepository(app, libraryRepository, settingsStore) }

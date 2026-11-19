@@ -468,17 +468,17 @@ private class IsMangaApi(private val store: IsAccountStore) {
 class IsMangaChapterTranslator(
     context: Context,
     private val httpClient: OkHttpClient,
-) {
+) : MangaChapterTranslator {
     private val store = IsAccountStore(File(context.filesDir, "ismanga_accounts.json"))
     private val api = IsMangaApi(store)
     private val renderer = IsTextRenderer()
 
     /** Directory that holds translated PNGs for [chapterId]. */
-    fun chapterDir(cacheDir: File, chapterId: String): File =
+    override fun chapterDir(cacheDir: File, chapterId: String): File =
         File(cacheDir, "ismanga/${chapterId.replace(':', '_').replace('/', '_')}")
 
     /** `file://` URIs of cached translated pages when every page in the chapter is ready. */
-    fun cachedChapterPages(cacheDir: File, chapterId: String, pageCount: Int): List<String>? {
+    override fun cachedChapterPages(cacheDir: File, chapterId: String, pageCount: Int): List<String>? {
         if (pageCount <= 0) return null
         val dir = chapterDir(cacheDir, chapterId)
         val files = (0 until pageCount).map { File(dir, "p_${it.toString().padStart(4, '0')}.png") }
@@ -486,11 +486,11 @@ class IsMangaChapterTranslator(
     }
 
     /** Translate all pages of a chapter and return local file:// URIs for the translated PNGs (cached). */
-    suspend fun translateChapter(
+    override suspend fun translateChapter(
         chapterId: String,
         pageUrls: List<String>,
         cacheDir: File,
-        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+        onProgress: (done: Int, total: Int) -> Unit,
     ): List<String> = withContext(Dispatchers.IO) {
         val outDir = chapterDir(cacheDir, chapterId)
         val outputFiles = (pageUrls.indices).map { File(outDir, "p_${it.toString().padStart(4, '0')}.png") }
@@ -686,12 +686,43 @@ class IsMangaChapterTranslator(
     }
 }
 
-/** Progress/result state for chapter-wide translation (IsManga). */
+/** Thrown by the translator when it is busy/unavailable so callers can retry or report it. */
+class TranslatorBusyException(message: String? = null, cause: Throwable? = null) : Exception(message, cause)
+
+/** Chapter image translation backend (produces cached file:// page images). */
+interface MangaChapterTranslator {
+    /** Directory that holds translated PNGs for [chapterId]. */
+    fun chapterDir(cacheDir: File, chapterId: String): File
+
+    /** `file://` URIs of cached translated pages when every page in the chapter is ready. */
+    fun cachedChapterPages(cacheDir: File, chapterId: String, pageCount: Int): List<String>?
+
+    /**
+     * One cache slot per chapter page. A null slot means that page is still being translated.
+     * The default keeps other translator implementations source-compatible; progressive
+     * translators should override this so the reader can display completed pages immediately.
+     */
+    fun cachedChapterPageSlots(cacheDir: File, chapterId: String, pageCount: Int): List<String?> {
+        if (pageCount <= 0) return emptyList()
+        val complete = cachedChapterPages(cacheDir, chapterId, pageCount)
+        return complete?.map { it } ?: List(pageCount) { null }
+    }
+
+    /** Translate all pages of a chapter and return local file:// URIs for the translated PNGs (cached). */
+    suspend fun translateChapter(
+        chapterId: String,
+        pageUrls: List<String>,
+        cacheDir: File,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): List<String>
+}
+
+/** Progress/result state for chapter-wide translation. */
 data class ChapterTranslationState(
     val running: Boolean = false,
     val done: Int = 0,
     val total: Int = 0,
-    /** Translated page URIs (file://) when complete. */
+    /** Reader page URIs. While running this mixes ready translations with original pages. */
     val pages: List<String>? = null,
     /** Localized failure message; internal exception text is never shown to the reader. */
     val error: UiText? = null,
